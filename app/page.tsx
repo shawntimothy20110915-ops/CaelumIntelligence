@@ -204,12 +204,12 @@ export default function Home() {
           <motion.a
             href="/auth"
             whileHover={{ scale: 1.02 }}
-            style={{ color: 'rgba(244,236,221,0.5)', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.05em', textDecoration: 'none' }}
+            style={{ color: 'rgba(244,236,221,0.5)', fontSize: 13, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.05em', textDecoration: 'none' }}
           >
             sign in
           </motion.a>
           <LiquidButton size="sm" onClick={() => window.location.href = '/auth'}>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.9)' }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.9)' }}>
               get access
             </span>
           </LiquidButton>
@@ -275,7 +275,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.6 }}
-            style={{ color: 'rgba(244,236,221,0.35)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.05em', maxWidth: 420 }}
+            style={{ color: 'rgba(244,236,221,0.55)', fontFamily: "'JetBrains Mono', monospace", fontSize: 14, letterSpacing: '0.04em', maxWidth: 480 }}
           >
             Cryptographic passports. Immutable ledgers. Human-in-the-loop approvals.
           </motion.p>
@@ -287,10 +287,10 @@ export default function Home() {
             className="flex items-center gap-4 mt-2"
           >
             <MetalButton variant="gold" onClick={() => window.location.href = '/auth'}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>Start building</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, letterSpacing: '0.08em' }}>Start building</span>
             </MetalButton>
             <LiquidButton size="lg">
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.7)' }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.7)' }}>
                 View ledger demo
               </span>
             </LiquidButton>
@@ -446,10 +446,10 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4">
             <MetalButton variant="gold" onClick={() => window.location.href = '/auth'}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>Get your passport</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, letterSpacing: '0.08em' }}>Get your passport</span>
             </MetalButton>
             <LiquidButton size="lg">
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.6)' }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.6)' }}>
                 Read the docs
               </span>
             </LiquidButton>
