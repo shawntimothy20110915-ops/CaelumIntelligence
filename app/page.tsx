@@ -44,14 +44,6 @@ const FEATURES = [
     glow: "rgba(90,200,140,0.6)",
   },
   {
-    icon: "✦",
-    label: "Approvals",
-    sub: "Human-in-the-loop",
-    desc: "Route high-stakes decisions to human operators without halting execution. Sub-second escalation.",
-    color: "rgba(122,162,247,0.06)",
-    glow: "rgba(122,162,247,0.6)",
-  },
-  {
     icon: "◈",
     label: "Trust Chain",
     sub: "End-to-end verification",
