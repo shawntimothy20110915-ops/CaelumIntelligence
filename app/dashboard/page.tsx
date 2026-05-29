@@ -26,9 +26,10 @@ function saveDelegations(links: DelegationLink[]) {
 }
 
 const navItems = [
-  { key: 'dashboard',  label: 'Overview',  icon: '◈' },
-  { key: 'passports',  label: 'Passports', icon: '⬡' },
-  { key: 'chains',     label: 'Trust Chains', icon: '⛓' },
+  { key: 'dashboard',    label: 'Overview',     icon: '◈'   },
+  { key: 'passports',    label: 'Passports',    icon: '⬡'   },
+  { key: 'chains',       label: 'Trust Chains', icon: '⛓'   },
+  { key: 'integration',  label: 'Integrate',    icon: '</>'  },
 ] as const
 
 type NavKey = typeof navItems[number]['key']
@@ -47,6 +48,8 @@ export default function Dashboard() {
   const [mintPerms, setMintPerms] = useState<Set<string>>(new Set())
   const [minting, setMinting] = useState(false)
   const [mintError, setMintError] = useState('')
+  // reveal-once API key — never persisted
+  const [revealedKey, setRevealedKey] = useState<{ passportName: string; passportId: string; apiKey: string } | null>(null)
 
   // delegate form
   const [delegateTarget, setDelegateTarget] = useState<Passport | null>(null)
@@ -92,7 +95,10 @@ export default function Dashboard() {
       })
       const data = await r.json()
       if (!r.ok) { setMintError(data?.error ?? 'Mint failed'); return }
+      const apiKey = data.passportToken ?? data.apiKey ?? data.token ?? data.secret ?? null
+      const passportId = data.passport?.id ?? data.id ?? ''
       setShowMintForm(false); setMintName(''); setMintPerms(new Set())
+      if (apiKey) setRevealedKey({ passportName: mintName.trim(), passportId, apiKey })
       fetchPassports(session.token)
     } catch { setMintError('Network error') } finally { setMinting(false) }
   }
@@ -128,17 +134,19 @@ export default function Dashboard() {
 
   if (!session) return null
 
-  const showDash = activeNav === 'dashboard'
-  const showPassports = activeNav === 'passports'
-  const showChains = activeNav === 'chains'
+  const showDash        = activeNav === 'dashboard'
+  const showPassports   = activeNav === 'passports'
+  const showChains      = activeNav === 'chains'
+  const showIntegration = activeNav === 'integration'
 
   const activeCount = passports.filter(p => p.status === 'active').length
-  const chainCount = delegations.length
+  const chainCount  = delegations.length
 
   const headerMap: Record<NavKey, { title: string; sub: string }> = {
-    dashboard:  { title: 'Overview',      sub: 'Your agent passports'                          },
-    passports:  { title: 'Passports',     sub: 'Manage agent identity certificates'             },
-    chains:     { title: 'Trust Chains',  sub: 'Delegation graph — who authorized what'         },
+    dashboard:   { title: 'Overview',       sub: 'Your agent passports'                    },
+    passports:   { title: 'Passports',      sub: 'Manage agent identity certificates'      },
+    chains:      { title: 'Trust Chains',   sub: 'Delegation graph — who authorized what'  },
+    integration: { title: 'Integrate',      sub: 'SDK, CLI, GitHub Actions, Webhooks'      },
   }
 
   return (
@@ -264,8 +272,55 @@ export default function Dashboard() {
               }} />
             </motion.div>
           )}
+
+          {/* ── Integration ──────────────────────── */}
+          {showIntegration && (
+            <motion.div key="integration" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+              <IntegrationView sessionToken={session.token} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
+
+      {/* ── API Key Reveal Modal (once only) ─────── */}
+      <AnimatePresence>
+        {revealedKey && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <motion.div initial={{ scale: 0.94, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, y: 20 }}
+              style={{ background: '#0e0f13', border: '1px solid rgba(212,163,90,0.3)', borderRadius: 18, padding: '32px 36px', width: '100%', maxWidth: 520 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '18px 18px 0 0', background: 'linear-gradient(90deg, transparent, rgba(212,163,90,0.6), transparent)' }} />
+
+              <div style={{ fontSize: 11, color: 'rgba(212,163,90,0.6)', letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
+                Passport Minted
+              </div>
+              <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 26, color: 'var(--ink)', marginBottom: 4 }}>
+                {revealedKey.passportName}
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 28 }}>
+                {revealedKey.passportId}
+              </div>
+
+              <div style={{ background: 'rgba(224,92,92,0.06)', border: '1px solid rgba(224,92,92,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 22, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ color: '#e05c5c', fontSize: 14, flexShrink: 0 }}>⚠</span>
+                <span style={{ fontSize: 12, color: 'rgba(224,92,92,0.8)', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.6 }}>
+                  Copy this key now. It will never be shown again.
+                </span>
+              </div>
+
+              <ApiKeyReveal apiKey={revealedKey.apiKey} />
+
+              <button onClick={() => setRevealedKey(null)}
+                style={{ marginTop: 22, width: '100%', padding: '10px 0', background: 'rgba(212,163,90,0.1)', border: '1px solid rgba(212,163,90,0.25)', borderRadius: 8, color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,163,90,0.18)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(212,163,90,0.1)' }}
+              >
+                I've saved my key — close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Delegate Modal ───────────────────────── */}
       <AnimatePresence>
@@ -557,6 +612,172 @@ function TrustChainView({ passports, delegations, onClearChain }: {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── ApiKeyReveal ────────────────────────────────────────── */
+function ApiKeyReveal({ apiKey }: { apiKey: string }) {
+  const [masked, setMasked] = useState(true)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const copy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(null), 1800) })
+  }
+
+  const displayed = masked ? `${apiKey.slice(0, 8)}${'•'.repeat(Math.min(apiKey.length - 12, 24))}${apiKey.slice(-4)}` : apiKey
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 10, color: 'rgba(212,163,90,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', marginBottom: 6 }}>Passport API Key</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(212,163,90,0.2)', borderRadius: 8, padding: '10px 14px' }}>
+          <span style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: masked ? 'rgba(244,236,221,0.4)' : 'rgba(212,163,90,0.9)', overflowX: 'auto', whiteSpace: 'nowrap' }}>{displayed}</span>
+          <button onClick={() => setMasked(m => !m)} style={{ background: 'transparent', border: 'none', color: 'rgba(244,236,221,0.3)', cursor: 'pointer', fontSize: 14, padding: '2px 4px' }}>{masked ? '👁' : '🙈'}</button>
+          <button onClick={() => copy(apiKey, 'key')} style={{ background: copied === 'key' ? 'rgba(90,159,106,0.15)' : 'rgba(212,163,90,0.08)', border: `1px solid ${copied === 'key' ? 'rgba(90,159,106,0.4)' : 'rgba(212,163,90,0.2)'}`, borderRadius: 6, color: copied === 'key' ? '#5a9f6a' : 'rgba(212,163,90,0.7)', fontSize: 11, fontFamily: 'JetBrains Mono, monospace', padding: '4px 10px', cursor: 'pointer', transition: 'all 0.2s' }}>{copied === 'key' ? '✓ Copied' : 'Copy'}</button>
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: 'rgba(212,163,90,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', marginBottom: 6 }}>.env</div>
+        <div style={{ position: 'relative', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '12px 14px' }}>
+          <pre style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(244,236,221,0.5)', lineHeight: 1.7 }}>{`AGENTPASS_TOKEN=${masked ? `${apiKey.slice(0, 8)}••••••••` : apiKey}\nAGENTPASS_API_URL=https://agentpassv22.vercel.app/api`}</pre>
+          <button onClick={() => copy(`AGENTPASS_TOKEN=${apiKey}\nAGENTPASS_API_URL=https://agentpassv22.vercel.app/api`, 'env')} style={{ position: 'absolute', top: 8, right: 10, background: copied === 'env' ? 'rgba(90,159,106,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied === 'env' ? 'rgba(90,159,106,0.4)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 5, color: copied === 'env' ? '#5a9f6a' : 'rgba(244,236,221,0.3)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', padding: '3px 8px', cursor: 'pointer', transition: 'all 0.2s' }}>{copied === 'env' ? '✓' : 'Copy'}</button>
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: 'rgba(212,163,90,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', marginBottom: 6 }}>Quick start</div>
+        <div style={{ position: 'relative', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '12px 14px' }}>
+          <pre style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(244,236,221,0.45)', lineHeight: 1.7 }}>{`import { AgentPass } from '@agentpass/sdk'\nconst ap = new AgentPass({\n  token: process.env.AGENTPASS_TOKEN\n})`}</pre>
+          <button onClick={() => copy(`import { AgentPass } from '@agentpass/sdk'\nconst ap = new AgentPass({\n  token: process.env.AGENTPASS_TOKEN\n})`, 'sdk')} style={{ position: 'absolute', top: 8, right: 10, background: copied === 'sdk' ? 'rgba(90,159,106,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied === 'sdk' ? 'rgba(90,159,106,0.4)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 5, color: copied === 'sdk' ? '#5a9f6a' : 'rgba(244,236,221,0.3)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', padding: '3px 8px', cursor: 'pointer', transition: 'all 0.2s' }}>{copied === 'sdk' ? '✓' : 'Copy'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── IntegrationView ─────────────────────────────────────── */
+function IntegrationView({ sessionToken: _sessionToken }: { sessionToken: string }) {
+  const [activeTab, setActiveTab] = useState<'sdk' | 'cli' | 'actions' | 'webhooks'>('sdk')
+  const [copied, setCopied] = useState<string | null>(null)
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSaved, setWebhookSaved] = useState(false)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookTestResult, setWebhookTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [selectedEvents, setSelectedEvents] = useState(new Set(['passport.minted', 'passport.revoked']))
+
+  const copy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(null), 1800) })
+  }
+
+  const testWebhook = async () => {
+    if (!webhookUrl.trim()) return
+    setWebhookTesting(true); setWebhookTestResult(null)
+    try {
+      const r = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'test.ping', timestamp: Date.now(), passportId: 'pp_test', hmac: 'sha256=test' }) })
+      setWebhookTestResult({ ok: r.ok, msg: `${r.status} ${r.statusText}` })
+    } catch (e: unknown) {
+      setWebhookTestResult({ ok: false, msg: e instanceof Error ? e.message : 'Network error' })
+    } finally { setWebhookTesting(false) }
+  }
+
+  const tabs = [
+    { key: 'sdk' as const,      label: 'npm SDK'        },
+    { key: 'cli' as const,      label: 'CLI'            },
+    { key: 'actions' as const,  label: 'GitHub Actions' },
+    { key: 'webhooks' as const, label: 'Webhooks'       },
+  ]
+
+  const CB = ({ code, label, lang = '' }: { code: string; label: string; lang?: string }) => (
+    <div style={{ position: 'relative', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+      {lang && <div style={{ fontSize: 9, color: 'rgba(212,163,90,0.4)', letterSpacing: '0.12em', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>{lang}</div>}
+      <pre style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(244,236,221,0.65)', lineHeight: 1.75, overflowX: 'auto' }}>{code}</pre>
+      <button onClick={() => copy(code, label)} style={{ position: 'absolute', top: 10, right: 10, background: copied === label ? 'rgba(90,159,106,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied === label ? 'rgba(90,159,106,0.4)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 5, color: copied === label ? '#5a9f6a' : 'rgba(244,236,221,0.3)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', padding: '3px 8px', cursor: 'pointer', transition: 'all 0.2s' }}>{copied === label ? '✓' : 'Copy'}</button>
+    </div>
+  )
+
+  const SL = ({ text }: { text: string }) => <div style={{ fontSize: 10, color: 'rgba(212,163,90,0.5)', letterSpacing: '0.15em', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8, marginTop: 20 }}>{text}</div>
+  const Callout = ({ text }: { text: string }) => <div style={{ background: 'rgba(212,163,90,0.05)', borderLeft: '2px solid rgba(212,163,90,0.35)', borderRadius: '0 6px 6px 0', padding: '10px 14px', marginBottom: 16 }}><span style={{ fontSize: 12, color: 'rgba(212,163,90,0.7)', fontFamily: 'JetBrains Mono, monospace' }}>{text}</span></div>
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 28 }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)} style={{ padding: '9px 20px', background: 'transparent', border: 'none', borderBottom: activeTab === t.key ? '2px solid var(--gold)' : '2px solid transparent', color: activeTab === t.key ? 'var(--gold)' : 'rgba(244,236,221,0.35)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', fontWeight: activeTab === t.key ? 600 : 400, letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.15s', marginBottom: -1 }}>{t.label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'sdk' && (
+        <motion.div key="sdk" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          <SL text="Install" />
+          <CB label="sdk-install" code={`npm install @agentpass/sdk`} />
+          <SL text="Initialize" />
+          <CB label="sdk-init" lang="TypeScript" code={`import { AgentPass } from '@agentpass/sdk'\n\nconst ap = new AgentPass({\n  token: process.env.AGENTPASS_TOKEN,\n})`} />
+          <SL text="Mint a passport" />
+          <CB label="sdk-mint" lang="TypeScript" code={`const passport = await ap.mint({\n  agentName: 'purchase-agent-v2',\n  permissions: ['purchase', 'search'],\n})\n\nconsole.log(passport.id)     // pp_01J...\nconsole.log(passport.token)  // authorize agent calls with this`} />
+          <SL text="Verify at runtime" />
+          <CB label="sdk-verify" lang="TypeScript" code={`const result = await ap.verify(req.headers.authorization)\nif (!result.valid) throw new Error('Unauthorized agent')`} />
+          <Callout text="Set AGENTPASS_TOKEN in your environment — never hardcode it." />
+        </motion.div>
+      )}
+
+      {activeTab === 'cli' && (
+        <motion.div key="cli" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          <SL text="Install" />
+          <CB label="cli-install" lang="Shell" code={`npm install -g @agentpass/cli`} />
+          <SL text="Authenticate" />
+          <CB label="cli-auth" lang="Shell" code={`agentpass auth --token $AGENTPASS_TOKEN`} />
+          <SL text="Mint a passport" />
+          <CB label="cli-mint" lang="Shell" code={`agentpass mint \\\n  --name purchase-agent-v2 \\\n  --permissions purchase,search \\\n  --ttl 7d\n\n# → Passport ID: pp_01J...\n# → Token shown once`} />
+          <SL text="Manage" />
+          <CB label="cli-manage" lang="Shell" code={`agentpass list\nagentpass revoke pp_01J...`} />
+          <button onClick={() => {
+            const blob = new Blob([`AGENTPASS_TOKEN=your_token_here\nAGENTPASS_API_URL=https://agentpassv22.vercel.app/api\n`], { type: 'text/plain' })
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = '.env.agentpass'; a.click(); URL.revokeObjectURL(url)
+          }} className="dash-btn-outline">↓ Download .env template</button>
+        </motion.div>
+      )}
+
+      {activeTab === 'actions' && (
+        <motion.div key="actions" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          <Callout text="Add AGENTPASS_TOKEN to Settings → Secrets → Actions in your GitHub repo." />
+          <SL text=".github/workflows/agent-deploy.yml" />
+          <CB label="gha-yml" lang="YAML" code={`name: Deploy Agent\non:\n  push:\n    branches: [main]\n\njobs:\n  mint-passport:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: agentpass/mint-passport@v1\n        id: passport\n        with:\n          token: \${{ secrets.AGENTPASS_TOKEN }}\n          agent-name: purchase-agent-v2\n          permissions: purchase,search\n          ttl: 7d\n\n      - name: Deploy\n        env:\n          PASSPORT_ID: \${{ steps.passport.outputs.passport-id }}\n          PASSPORT_TOKEN: \${{ steps.passport.outputs.token }}\n        run: ./deploy.sh`} />
+          <SL text="Revoke on rollback" />
+          <CB label="gha-revoke" lang="YAML" code={`      - name: Revoke on failure\n        if: failure()\n        uses: agentpass/revoke-passport@v1\n        with:\n          token: \${{ secrets.AGENTPASS_TOKEN }}\n          passport-id: \${{ steps.passport.outputs.passport-id }}`} />
+        </motion.div>
+      )}
+
+      {activeTab === 'webhooks' && (
+        <motion.div key="webhooks" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+            <div>
+              <SL text="Endpoint URL" />
+              <input type="url" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://your-api.com/agentpass-events" className="dash-input" style={{ marginBottom: 16 }} />
+              <SL text="Events" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                {['passport.minted', 'action.verified', 'action.denied', 'passport.revoked', 'proof.delegated'].map(ev => (
+                  <label key={ev} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selectedEvents.has(ev)} onChange={() => setSelectedEvents(prev => { const n = new Set(prev); n.has(ev) ? n.delete(ev) : n.add(ev); return n })} style={{ accentColor: 'var(--gold)', width: 14, height: 14 }} />
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: selectedEvents.has(ev) ? 'rgba(212,163,90,0.8)' : 'rgba(244,236,221,0.35)' }}>{ev}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setWebhookSaved(true)} disabled={!webhookUrl.trim()} className="dash-btn-gold">{webhookSaved ? '✓ Saved' : 'Save Webhook'}</button>
+                <button onClick={testWebhook} disabled={!webhookUrl.trim() || webhookTesting} className="dash-btn-outline">{webhookTesting ? 'Testing…' : 'Test'}</button>
+              </div>
+              {webhookTestResult && <div style={{ marginTop: 10, fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: webhookTestResult.ok ? '#5a9f6a' : '#e05c5c' }}>{webhookTestResult.ok ? '✓ ' : '✗ '}{webhookTestResult.msg}</div>}
+            </div>
+            <div>
+              <SL text="Event payload" />
+              <CB label="webhook-payload" lang="JSON" code={`{\n  "event": "action.denied",\n  "passportId": "pp_01J...",\n  "agentId": "purchase-agent-v2",\n  "action": "purchase",\n  "reason": "exceeds_limit",\n  "timestamp": 1748476800000,\n  "hmac": "sha256=..."\n}`} />
+              <Callout text="Verify the HMAC signature before processing any event." />
+              <SL text="Verify HMAC" />
+              <CB label="webhook-hmac" lang="TypeScript" code={`import { createHmac } from 'crypto'\n\nfunction verify(payload: string, sig: string, secret: string) {\n  const expected = createHmac('sha256', secret)\n    .update(payload).digest('hex')\n  return \`sha256=\${expected}\` === sig\n}`} />
+            </div>
+          </div>
+        </motion.div>
       )}
     </div>
   )
