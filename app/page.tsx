@@ -297,21 +297,18 @@ export default function Home() {
           </motion.div>
         </motion.div>
 
-        {/* Metric strip */}
+        {/* Scroll cue */}
         <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 1.1 }}
-          className="absolute bottom-12 left-0 right-0 z-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.7, delay: 1.3 }}
+          className="absolute bottom-10 left-0 right-0 z-10 flex justify-center"
         >
-          <div className="flex items-center justify-center gap-12 px-8">
-            {[['99.97%', 'uptime'], ['<80ms', 'latency'], ['10M+', 'decisions'], ['SOC 2', 'compliant']].map(([v, l]) => (
-              <div key={l} className="text-center">
-                <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 22, color: 'rgba(212,163,90,0.9)' }}>{v}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'rgba(244,236,221,0.3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{l}</div>
-              </div>
-            ))}
-          </div>
+          <motion.div
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ width: 1, height: 40, background: 'linear-gradient(to bottom, rgba(212,163,90,0.4), transparent)' }}
+          />
         </motion.div>
       </section>
 

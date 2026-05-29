@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
 interface Session { token: string; email: string; name: string }
-interface Stats { totalDecisions: number; approvalRate: number; activePassports: number; pendingApprovals: number; ledgerEvents: number; avgLatencyMs: number }
 interface ApprovalItem { id: string; agentName: string; action: string; resource: string; risk: 'high' | 'medium' | 'low'; status: string; requestedAt: string }
 interface LedgerEvent { id: string; action: string; actor: string; agentName: string; resource: string; ts: string; hash: string }
 interface Passport { id: string; agentName: string; status: string; permissions: string[]; expiresAt: string }
@@ -55,8 +54,6 @@ export default function Dashboard() {
   const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [activeNav, setActiveNav] = useState<NavKey>('dashboard')
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
   const [approvals, setApprovals] = useState<ApprovalItem[]>([])
   const [approvalsLoading, setApprovalsLoading] = useState(true)
   const [decidingId, setDecidingId] = useState<string | null>(null)
@@ -80,15 +77,6 @@ export default function Dashboard() {
       setSession(parsed)
     } catch { router.replace('/auth') }
   }, [router])
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const r = await fetch(`${API}/status`)
-      if (!r.ok) return
-      const data = await r.json()
-      setStats(data.stats)
-    } catch {} finally { setStatsLoading(false) }
-  }, [])
 
   const fetchApprovals = useCallback(async (token: string) => {
     try {
@@ -120,12 +108,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session) return
     const { token } = session
-    fetchStats(); fetchApprovals(token); fetchLedger(token); fetchPassports(token)
-    const t1 = setInterval(fetchStats, 30_000)
-    const t2 = setInterval(() => fetchApprovals(token), 15_000)
-    const t3 = setInterval(() => fetchLedger(token), 10_000)
-    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3) }
-  }, [session, fetchStats, fetchApprovals, fetchLedger, fetchPassports])
+    fetchApprovals(token); fetchLedger(token); fetchPassports(token)
+    const t1 = setInterval(() => fetchApprovals(token), 15_000)
+    const t2 = setInterval(() => fetchLedger(token), 10_000)
+    return () => { clearInterval(t1); clearInterval(t2) }
+  }, [session, fetchApprovals, fetchLedger, fetchPassports])
 
   async function decide(id: string, decision: 'approve' | 'deny') {
     if (!session || decidingId) return
@@ -142,7 +129,7 @@ export default function Dashboard() {
           setApprovals(prev => prev.filter(a => a.id !== id))
           setFadingIds(prev => { const n = new Set(prev); n.delete(id); return n })
         }, 400)
-        fetchStats()
+        fetchLedger(session.token)
       }
     } catch {} finally { setDecidingId(null) }
   }
@@ -159,7 +146,7 @@ export default function Dashboard() {
       const data = await r.json()
       if (!r.ok) { setMintError(data?.error ?? 'Mint failed'); return }
       setShowMintForm(false); setMintName(''); setMintPerms(new Set())
-      fetchPassports(session.token); fetchStats()
+      fetchPassports(session.token); fetchLedger(session.token)
     } catch { setMintError('Network error') } finally { setMinting(false) }
   }
 
@@ -284,27 +271,34 @@ export default function Dashboard() {
         <AnimatePresence mode="wait">
           {showDash && (
             <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-              {/* KPI Strip */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
-                {statsLoading ? [0,1,2,3].map(i => (
-                  <motion.div key={i} animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', minHeight: 100 }} />
-                )) : stats ? ([
-                  { label: 'Total Decisions', val: stats.totalDecisions.toLocaleString(), sub: 'all time' },
-                  { label: 'Approval Rate', val: `${(stats.approvalRate * 100).toFixed(1)}%`, sub: 'rolling 30d' },
-                  { label: 'p95 Latency', val: `${stats.avgLatencyMs}ms`, sub: 'avg response' },
-                  { label: 'Open Cases', val: stats.pendingApprovals, sub: `${stats.activePassports} passports` },
-                ] as { label: string; val: string | number; sub: string }[]).map((kpi, i) => (
-                  <motion.div key={kpi.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', position: 'relative', overflow: 'hidden' }}
-                  >
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(212,163,90,0.3), transparent)' }} />
-                    <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.35)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>{kpi.label}</div>
-                    <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 34, color: 'var(--ink)', lineHeight: 1 }}>{kpi.val}</div>
-                    {kpi.sub && <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.25)', marginTop: 6 }}>{kpi.sub}</div>}
-                  </motion.div>
-                )) : null}
-              </div>
+              {/* KPI Strip — derived from user's own data */}
+              {(() => {
+                const loading = approvalsLoading || ledgerLoading || passportsLoading
+                const activePassports = passports.filter(p => p.status === 'active').length
+                const kpis = [
+                  { label: 'Passports', val: passports.length, sub: `${activePassports} active` },
+                  { label: 'Ledger Events', val: events.length, sub: 'recorded actions' },
+                  { label: 'Pending Approvals', val: approvals.length, sub: 'awaiting review' },
+                  { label: 'Decisions Made', val: events.filter(e => e.action.toLowerCase().includes('approve') || e.action.toLowerCase().includes('deny')).length, sub: 'approve / deny' },
+                ] as { label: string; val: number; sub: string }[]
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+                    {loading ? [0,1,2,3].map(i => (
+                      <motion.div key={i} animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
+                        style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', minHeight: 100 }} />
+                    )) : kpis.map((kpi, i) => (
+                      <motion.div key={kpi.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+                        style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', position: 'relative', overflow: 'hidden' }}
+                      >
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(212,163,90,0.3), transparent)' }} />
+                        <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.35)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>{kpi.label}</div>
+                        <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 34, color: 'var(--ink)', lineHeight: 1 }}>{kpi.val}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.25)', marginTop: 6 }}>{kpi.sub}</div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )
+              })()}
 
               {/* Two-col panels */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
