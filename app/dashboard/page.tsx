@@ -6,13 +6,29 @@ import { useRouter } from 'next/navigation'
 
 interface Session { token: string; email: string; name: string }
 interface Passport { id: string; agentName: string; status: string; permissions: string[]; expiresAt: string }
+interface DelegationLink { childId: string; parentId: string; ttl: string; createdAt: string }
 
 const API = 'https://agentpassv22.vercel.app/api'
 const ALL_PERMISSIONS = ['purchase', 'search', 'refund', 'booking', 'transfer']
+const TTL_OPTIONS = [
+  { label: '15 minutes', value: '15m' },
+  { label: '1 hour',     value: '1h'  },
+  { label: '6 hours',    value: '6h'  },
+  { label: '24 hours',   value: '24h' },
+  { label: '7 days',     value: '7d'  },
+]
+
+function loadDelegations(): DelegationLink[] {
+  try { return JSON.parse(localStorage.getItem('ap-delegations') ?? '[]') } catch { return [] }
+}
+function saveDelegations(links: DelegationLink[]) {
+  localStorage.setItem('ap-delegations', JSON.stringify(links))
+}
 
 const navItems = [
-  { key: 'dashboard', label: 'Overview', icon: '◈' },
-  { key: 'passports', label: 'Passports', icon: '⬡' },
+  { key: 'dashboard',  label: 'Overview',  icon: '◈' },
+  { key: 'passports',  label: 'Passports', icon: '⬡' },
+  { key: 'chains',     label: 'Trust Chains', icon: '⛓' },
 ] as const
 
 type NavKey = typeof navItems[number]['key']
@@ -23,11 +39,22 @@ export default function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavKey>('dashboard')
   const [passports, setPassports] = useState<Passport[]>([])
   const [passportsLoading, setPassportsLoading] = useState(true)
+  const [delegations, setDelegations] = useState<DelegationLink[]>([])
+
+  // mint form
   const [showMintForm, setShowMintForm] = useState(false)
   const [mintName, setMintName] = useState('')
   const [mintPerms, setMintPerms] = useState<Set<string>>(new Set())
   const [minting, setMinting] = useState(false)
   const [mintError, setMintError] = useState('')
+
+  // delegate form
+  const [delegateTarget, setDelegateTarget] = useState<Passport | null>(null)
+  const [delegateName, setDelegateName] = useState('')
+  const [delegatePerms, setDelegatePerms] = useState<Set<string>>(new Set())
+  const [delegateTtl, setDelegateTtl] = useState('1h')
+  const [delegating, setDelegating] = useState(false)
+  const [delegateError, setDelegateError] = useState('')
 
   useEffect(() => {
     try {
@@ -36,6 +63,7 @@ export default function Dashboard() {
       const parsed = JSON.parse(raw) as Session
       if (!parsed?.token) { router.replace('/auth'); return }
       setSession(parsed)
+      setDelegations(loadDelegations())
     } catch { router.replace('/auth') }
   }, [router])
 
@@ -69,17 +97,49 @@ export default function Dashboard() {
     } catch { setMintError('Network error') } finally { setMinting(false) }
   }
 
+  async function delegatePassport() {
+    if (!session || !delegateTarget || !delegateName.trim()) return
+    setDelegating(true); setDelegateError('')
+    try {
+      const r = await fetch(`${API}/passport/mint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({
+          agentName: delegateName.trim(),
+          permissions: Array.from(delegatePerms),
+          metadata: { parentPassportId: delegateTarget.id, ttl: delegateTtl, derived: true },
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok) { setDelegateError(data?.error ?? 'Delegation failed'); return }
+      const newLink: DelegationLink = {
+        childId: data.passport?.id ?? data.id ?? `derived-${Date.now()}`,
+        parentId: delegateTarget.id,
+        ttl: delegateTtl,
+        createdAt: new Date().toISOString(),
+      }
+      const updated = [...delegations, newLink]
+      setDelegations(updated)
+      saveDelegations(updated)
+      setDelegateTarget(null); setDelegateName(''); setDelegatePerms(new Set()); setDelegateTtl('1h')
+      fetchPassports(session.token)
+    } catch { setDelegateError('Network error') } finally { setDelegating(false) }
+  }
+
   if (!session) return null
 
   const showDash = activeNav === 'dashboard'
   const showPassports = activeNav === 'passports'
-
-  const headerMap: Record<NavKey, { title: string; sub: string }> = {
-    dashboard: { title: 'Overview', sub: 'Your agent passports' },
-    passports: { title: 'Passports', sub: 'Manage agent identity certificates' },
-  }
+  const showChains = activeNav === 'chains'
 
   const activeCount = passports.filter(p => p.status === 'active').length
+  const chainCount = delegations.length
+
+  const headerMap: Record<NavKey, { title: string; sub: string }> = {
+    dashboard:  { title: 'Overview',      sub: 'Your agent passports'                          },
+    passports:  { title: 'Passports',     sub: 'Manage agent identity certificates'             },
+    chains:     { title: 'Trust Chains',  sub: 'Delegation graph — who authorized what'         },
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', color: 'var(--ink)', fontFamily: 'Inter, sans-serif' }}>
@@ -87,6 +147,8 @@ export default function Dashboard() {
         @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap');
         .dash-input { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 9px 12px; color: var(--ink); font-size: 13px; font-family: 'JetBrains Mono', monospace; outline: none; width: 100%; box-sizing: border-box; transition: border-color 0.15s; }
         .dash-input:focus { border-color: var(--gold); }
+        .dash-select { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 9px 12px; color: var(--ink); font-size: 13px; font-family: 'JetBrains Mono', monospace; outline: none; width: 100%; box-sizing: border-box; appearance: none; cursor: pointer; }
+        .dash-select:focus { border-color: var(--gold); }
         .dash-btn-gold { padding: 9px 20px; background: var(--gold); border: none; border-radius: 7px; color: #0a0a0d; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; transition: opacity 0.15s; }
         .dash-btn-gold:hover:not(:disabled) { opacity: 0.85; }
         .dash-btn-gold:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -95,6 +157,9 @@ export default function Dashboard() {
         .panel { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; overflow: hidden; }
         .panel-header { padding: 16px 22px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
         .perm-tag { padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.12s; letter-spacing: 0.03em; font-family: 'JetBrains Mono', monospace; }
+        .perm-tag:disabled { opacity: 0.25; cursor: not-allowed; }
+        .chain-line { position: absolute; left: 16px; top: 0; bottom: 0; width: 1px; background: linear-gradient(to bottom, rgba(212,163,90,0.3), rgba(212,163,90,0.05)); }
+        .chain-dot { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--gold); background: rgba(212,163,90,0.15); }
       `}</style>
 
       {/* Sidebar */}
@@ -113,14 +178,13 @@ export default function Dashboard() {
 
         <nav style={{ padding: '14px 0', flex: 1 }}>
           {navItems.map(item => (
-            <motion.button
-              key={item.key}
-              onClick={() => setActiveNav(item.key)}
-              whileHover={{ x: 2 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 18px', background: activeNav === item.key ? 'rgba(212,163,90,0.08)' : 'transparent', border: 'none', borderLeft: activeNav === item.key ? '2px solid var(--gold)' : '2px solid transparent', color: activeNav === item.key ? 'var(--gold)' : 'rgba(244,236,221,0.4)', fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: activeNav === item.key ? 600 : 400, letterSpacing: '0.03em', cursor: 'pointer', transition: 'all 0.15s', borderRadius: '0 6px 6px 0' }}
-            >
+            <motion.button key={item.key} onClick={() => setActiveNav(item.key)} whileHover={{ x: 2 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 18px', background: activeNav === item.key ? 'rgba(212,163,90,0.08)' : 'transparent', border: 'none', borderLeft: activeNav === item.key ? '2px solid var(--gold)' : '2px solid transparent', color: activeNav === item.key ? 'var(--gold)' : 'rgba(244,236,221,0.4)', fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: activeNav === item.key ? 600 : 400, letterSpacing: '0.03em', cursor: 'pointer', transition: 'all 0.15s', borderRadius: '0 6px 6px 0' }}>
               <span style={{ fontSize: 12, opacity: 0.7 }}>{item.icon}</span>
               {item.label}
+              {item.key === 'chains' && chainCount > 0 && (
+                <span style={{ marginLeft: 'auto', fontSize: 10, background: 'rgba(212,163,90,0.15)', color: 'var(--gold)', padding: '1px 6px', borderRadius: 10, fontFamily: 'JetBrains Mono, monospace' }}>{chainCount}</span>
+              )}
             </motion.button>
           ))}
         </nav>
@@ -128,8 +192,7 @@ export default function Dashboard() {
         <div style={{ padding: '14px 18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: 12, color: 'rgba(244,236,221,0.6)', marginBottom: 2, fontWeight: 500 }}>{session.name}</div>
           <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.25)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'JetBrains Mono, monospace' }}>{session.email}</div>
-          <button
-            onClick={() => { localStorage.removeItem('ap-session'); router.push('/auth') }}
+          <button onClick={() => { localStorage.removeItem('ap-session'); router.push('/auth') }}
             style={{ marginTop: 12, width: '100%', padding: '7px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, color: 'rgba(244,236,221,0.25)', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', transition: 'all 0.15s', fontFamily: 'Inter, sans-serif' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(224,92,92,0.4)'; e.currentTarget.style.color = '#e05c5c' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(244,236,221,0.25)' }}
@@ -139,13 +202,7 @@ export default function Dashboard() {
 
       {/* Main */}
       <main style={{ flex: 1, overflowY: 'auto', padding: '36px 40px' }}>
-        <motion.div
-          key={activeNav}
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          style={{ marginBottom: 32 }}
-        >
+        <motion.div key={activeNav} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ marginBottom: 32 }}>
           <h1 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 30, fontWeight: 400, color: 'var(--ink)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
             {headerMap[activeNav].title}
           </h1>
@@ -153,16 +210,17 @@ export default function Dashboard() {
         </motion.div>
 
         <AnimatePresence mode="wait">
+          {/* ── Overview ─────────────────────────── */}
           {showDash && (
             <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-              {/* KPI strip */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 32, maxWidth: 480 }}>
-                {passportsLoading ? [0, 1].map(i => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32, maxWidth: 600 }}>
+                {passportsLoading ? [0,1,2].map(i => (
                   <motion.div key={i} animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
                     style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', minHeight: 90 }} />
                 )) : ([
-                  { label: 'Passports', val: passports.length, sub: 'total issued' },
-                  { label: 'Active', val: activeCount, sub: 'currently active' },
+                  { label: 'Passports',    val: passports.length, sub: 'total issued'       },
+                  { label: 'Active',       val: activeCount,       sub: 'currently active'  },
+                  { label: 'Delegations',  val: chainCount,        sub: 'derived passports' },
                 ]).map((kpi, i) => (
                   <motion.div key={kpi.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                     style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '22px 24px', position: 'relative', overflow: 'hidden' }}>
@@ -175,35 +233,133 @@ export default function Dashboard() {
               </div>
 
               <PassportSection
-                passports={passports} loading={passportsLoading} showMintForm={showMintForm} mintName={mintName}
-                mintPerms={mintPerms} minting={minting} mintError={mintError}
+                passports={passports} delegations={delegations} loading={passportsLoading}
+                showMintForm={showMintForm} mintName={mintName} mintPerms={mintPerms} minting={minting} mintError={mintError}
                 onToggleMint={() => setShowMintForm(v => !v)} onMintNameChange={setMintName}
                 onTogglePerm={p => setMintPerms(prev => { const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n })}
-                onMint={mintPassport}
+                onMint={mintPassport} onDelegate={setDelegateTarget}
               />
             </motion.div>
           )}
 
+          {/* ── Passports ────────────────────────── */}
           {showPassports && (
             <motion.div key="passports" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
               <PassportSection
-                passports={passports} loading={passportsLoading} showMintForm={showMintForm} mintName={mintName}
-                mintPerms={mintPerms} minting={minting} mintError={mintError}
+                passports={passports} delegations={delegations} loading={passportsLoading}
+                showMintForm={showMintForm} mintName={mintName} mintPerms={mintPerms} minting={minting} mintError={mintError}
                 onToggleMint={() => setShowMintForm(v => !v)} onMintNameChange={setMintName}
                 onTogglePerm={p => setMintPerms(prev => { const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n })}
-                onMint={mintPassport} standalone
+                onMint={mintPassport} onDelegate={setDelegateTarget} standalone
               />
+            </motion.div>
+          )}
+
+          {/* ── Trust Chains ─────────────────────── */}
+          {showChains && (
+            <motion.div key="chains" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+              <TrustChainView passports={passports} delegations={delegations} onClearChain={id => {
+                const updated = delegations.filter(d => d.childId !== id && d.parentId !== id)
+                setDelegations(updated); saveDelegations(updated)
+              }} />
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      {/* ── Delegate Modal ───────────────────────── */}
+      <AnimatePresence>
+        {delegateTarget && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={e => { if (e.target === e.currentTarget) setDelegateTarget(null) }}
+          >
+            <motion.div initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
+              style={{ background: '#111115', border: '1px solid rgba(212,163,90,0.18)', borderRadius: 18, padding: '28px 32px', width: '100%', maxWidth: 480 }}>
+
+              {/* Header */}
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ fontSize: 11, color: 'rgba(212,163,90,0.6)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6, fontFamily: 'JetBrains Mono, monospace' }}>
+                  Delegating from
+                </div>
+                <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22, color: 'var(--ink)' }}>
+                  {delegateTarget.agentName}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.3)', fontFamily: 'JetBrains Mono, monospace', marginTop: 4 }}>
+                  {delegateTarget.id}
+                </div>
+              </div>
+
+              {/* Derived agent name */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ fontSize: 11, color: 'rgba(244,236,221,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
+                  Derived Agent Name
+                </label>
+                <input type="text" value={delegateName} onChange={e => setDelegateName(e.target.value)}
+                  placeholder={`${delegateTarget.agentName}-sub`} className="dash-input" />
+              </div>
+
+              {/* Permission subset */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ fontSize: 11, color: 'rgba(244,236,221,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4, fontFamily: 'JetBrains Mono, monospace' }}>
+                  Permissions <span style={{ color: 'rgba(244,236,221,0.2)', textTransform: 'none', letterSpacing: 0 }}>— subset of parent only</span>
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  {ALL_PERMISSIONS.map(p => {
+                    const allowed = delegateTarget.permissions.includes(p)
+                    const selected = delegatePerms.has(p)
+                    return (
+                      <button key={p} disabled={!allowed} onClick={() => {
+                        if (!allowed) return
+                        setDelegatePerms(prev => { const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n })
+                      }} className="perm-tag" style={{
+                        background: selected ? 'rgba(212,163,90,0.1)' : 'transparent',
+                        border: `1px solid ${!allowed ? 'rgba(255,255,255,0.04)' : selected ? 'var(--gold)' : 'rgba(255,255,255,0.08)'}`,
+                        color: !allowed ? 'rgba(244,236,221,0.15)' : selected ? 'var(--gold)' : 'rgba(244,236,221,0.4)',
+                        fontWeight: selected ? 600 : 400,
+                      }}>{p}</button>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.2)', marginTop: 8, fontFamily: 'JetBrains Mono, monospace' }}>
+                  Greyed = not in parent passport
+                </div>
+              </div>
+
+              {/* TTL */}
+              <div style={{ marginBottom: 22 }}>
+                <label style={{ fontSize: 11, color: 'rgba(244,236,221,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
+                  Credential TTL
+                </label>
+                <select value={delegateTtl} onChange={e => setDelegateTtl(e.target.value)} className="dash-select">
+                  {TTL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {delegateError && (
+                <div style={{ fontSize: 12, color: '#e05c5c', marginBottom: 14, fontFamily: 'JetBrains Mono, monospace' }}>✗ {delegateError}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={delegatePassport} disabled={delegating || !delegateName.trim()} className="dash-btn-gold" style={{ flex: 1 }}>
+                  {delegating ? 'Issuing…' : '⛓ Issue Derived Passport'}
+                </button>
+                <button onClick={() => setDelegateTarget(null)} className="dash-btn-outline">Cancel</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-function PassportSection({ passports, loading, showMintForm, mintName, mintPerms, minting, mintError, onToggleMint, onMintNameChange, onTogglePerm, onMint, standalone }: {
-  passports: Passport[]; loading: boolean; showMintForm: boolean; mintName: string; mintPerms: Set<string>; minting: boolean; mintError: string;
-  onToggleMint: () => void; onMintNameChange: (v: string) => void; onTogglePerm: (p: string) => void; onMint: () => void; standalone?: boolean
+/* ─── PassportSection ─────────────────────────────────────── */
+function PassportSection({ passports, delegations, loading, showMintForm, mintName, mintPerms, minting, mintError, onToggleMint, onMintNameChange, onTogglePerm, onMint, onDelegate, standalone }: {
+  passports: Passport[]; delegations: DelegationLink[]; loading: boolean
+  showMintForm: boolean; mintName: string; mintPerms: Set<string>; minting: boolean; mintError: string
+  onToggleMint: () => void; onMintNameChange: (v: string) => void; onTogglePerm: (p: string) => void
+  onMint: () => void; onDelegate: (p: Passport) => void; standalone?: boolean
 }) {
   return (
     <div>
@@ -251,27 +407,155 @@ function PassportSection({ passports, loading, showMintForm, mintName, mintPerms
           <div style={{ fontSize: 13, color: 'rgba(244,236,221,0.2)', fontFamily: 'JetBrains Mono, monospace' }}>Mint your first passport to get started</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
           <AnimatePresence>
-            {passports.map((pp, i) => (
-              <motion.div key={pp.id} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }} transition={{ delay: i * 0.04 }}
-                style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(212,163,90,0.2), transparent)' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>{pp.agentName}</div>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: pp.status === 'active' ? '#5a9f6a' : 'rgba(244,236,221,0.3)', background: pp.status === 'active' ? 'rgba(90,159,106,0.12)' : 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 4 }}>{pp.status}</span>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
-                  {(pp.permissions ?? []).map(p => (
-                    <span key={p} style={{ fontSize: 10, color: 'rgba(244,236,221,0.4)', background: 'rgba(255,255,255,0.04)', padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace' }}>{p}</span>
-                  ))}
-                </div>
-                <div style={{ fontSize: 10, color: 'rgba(244,236,221,0.2)', fontFamily: 'JetBrains Mono, monospace' }}>
-                  Expires {pp.expiresAt ? new Date(pp.expiresAt).toLocaleDateString() : '—'}
-                </div>
-              </motion.div>
-            ))}
+            {passports.map((pp, i) => {
+              const isChild = delegations.some(d => d.childId === pp.id)
+              const childCount = delegations.filter(d => d.parentId === pp.id).length
+              return (
+                <motion.div key={pp.id} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }} transition={{ delay: i * 0.04 }}
+                  style={{ background: isChild ? 'rgba(212,163,90,0.04)' : 'rgba(255,255,255,0.025)', border: `1px solid ${isChild ? 'rgba(212,163,90,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 12, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${isChild ? 'rgba(212,163,90,0.35)' : 'rgba(212,163,90,0.2)'}, transparent)` }} />
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div>
+                      {isChild && (
+                        <div style={{ fontSize: 9, color: 'rgba(212,163,90,0.6)', letterSpacing: '0.12em', marginBottom: 4, fontFamily: 'JetBrains Mono, monospace' }}>⛓ DERIVED</div>
+                      )}
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>{pp.agentName}</div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: pp.status === 'active' ? '#5a9f6a' : 'rgba(244,236,221,0.3)', background: pp.status === 'active' ? 'rgba(90,159,106,0.12)' : 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 4 }}>{pp.status}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+                    {(pp.permissions ?? []).map(p => (
+                      <span key={p} style={{ fontSize: 10, color: 'rgba(244,236,221,0.4)', background: 'rgba(255,255,255,0.04)', padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace' }}>{p}</span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'rgba(244,236,221,0.2)', fontFamily: 'JetBrains Mono, monospace' }}>
+                      Expires {pp.expiresAt ? new Date(pp.expiresAt).toLocaleDateString() : '—'}
+                      {childCount > 0 && <span style={{ marginLeft: 10, color: 'rgba(212,163,90,0.5)' }}>{childCount} derived</span>}
+                    </div>
+                    {pp.status === 'active' && (
+                      <button onClick={() => onDelegate(pp)}
+                        style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', color: 'rgba(212,163,90,0.6)', background: 'rgba(212,163,90,0.06)', border: '1px solid rgba(212,163,90,0.15)', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,163,90,0.12)'; e.currentTarget.style.color = 'var(--gold)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(212,163,90,0.06)'; e.currentTarget.style.color = 'rgba(212,163,90,0.6)' }}
+                      >⛓ Delegate</button>
+                    )}
+                  </div>
+                </motion.div>
+              )
+            })}
           </AnimatePresence>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── TrustChainView ──────────────────────────────────────── */
+function TrustChainView({ passports, delegations, onClearChain }: {
+  passports: Passport[]; delegations: DelegationLink[]; onClearChain: (id: string) => void
+}) {
+  const findPassport = (id: string) => passports.find(p => p.id === id)
+
+  const roots = passports.filter(p => !delegations.some(d => d.childId === p.id))
+  const orphanLinks = delegations.filter(d => !passports.some(p => p.id === d.childId))
+
+  if (delegations.length === 0) {
+    return (
+      <div style={{ padding: '60px 0', textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.3 }}>⛓</div>
+        <div style={{ fontSize: 11, color: 'rgba(212,163,90,0.4)', letterSpacing: '0.15em', marginBottom: 8 }}>NO DELEGATIONS YET</div>
+        <div style={{ fontSize: 13, color: 'rgba(244,236,221,0.2)', fontFamily: 'JetBrains Mono, monospace', maxWidth: 340, margin: '0 auto', lineHeight: 1.7 }}>
+          Open a passport and click Delegate to create a derived credential with scoped permissions and a TTL.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {roots.map(root => {
+        const children = delegations.filter(d => d.parentId === root.id)
+        if (children.length === 0) return null
+        return (
+          <motion.div key={root.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+            {/* Root passport */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 2 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(212,163,90,0.12)', border: '1px solid rgba(212,163,90,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>⬡</div>
+              <div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>{root.agentName}</div>
+                <div style={{ fontSize: 10, color: 'rgba(244,236,221,0.3)', fontFamily: 'JetBrains Mono, monospace', marginTop: 2 }}>Root · {root.id.slice(0, 16)}…</div>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
+                {root.permissions.map(p => (
+                  <span key={p} style={{ fontSize: 10, color: 'rgba(212,163,90,0.7)', background: 'rgba(212,163,90,0.08)', padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace' }}>{p}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Children */}
+            <div style={{ paddingLeft: 18, marginTop: 4 }}>
+              {children.map((link, ci) => {
+                const child = findPassport(link.childId)
+                return (
+                  <motion.div key={link.childId} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.08 }}
+                    style={{ position: 'relative', paddingLeft: 28, paddingTop: 14, paddingBottom: ci === children.length - 1 ? 0 : 14 }}>
+                    <div className="chain-line" style={{ top: 0, bottom: ci === children.length - 1 ? '50%' : 0 }} />
+                    <div className="chain-dot" />
+                    <div style={{ background: 'rgba(212,163,90,0.04)', border: '1px solid rgba(212,163,90,0.15)', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                          <span style={{ fontSize: 9, color: 'rgba(212,163,90,0.6)', letterSpacing: '0.1em', fontFamily: 'JetBrains Mono, monospace' }}>DERIVED</span>
+                          <span style={{ fontSize: 12, color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{child?.agentName ?? link.childId.slice(0, 20)}</span>
+                          {child && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: child.status === 'active' ? '#5a9f6a' : 'rgba(244,236,221,0.3)', background: child.status === 'active' ? 'rgba(90,159,106,0.12)' : 'transparent', padding: '1px 6px', borderRadius: 3, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                              {child.status}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {(child?.permissions ?? []).map(p => (
+                            <span key={p} style={{ fontSize: 10, color: 'rgba(244,236,221,0.35)', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: 3, fontFamily: 'JetBrains Mono, monospace' }}>{p}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, color: 'rgba(212,163,90,0.5)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 4 }}>TTL {link.ttl}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(244,236,221,0.2)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8 }}>
+                          {new Date(link.createdAt).toLocaleDateString()}
+                        </div>
+                        <button onClick={() => onClearChain(link.childId)}
+                          style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(224,92,92,0.5)', background: 'transparent', border: '1px solid rgba(224,92,92,0.2)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'all 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#e05c5c'; e.currentTarget.style.borderColor = '#e05c5c' }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(224,92,92,0.5)'; e.currentTarget.style.borderColor = 'rgba(224,92,92,0.2)' }}
+                        >revoke link</button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </motion.div>
+        )
+      })}
+
+      {orphanLinks.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: 'rgba(244,236,221,0.2)', letterSpacing: '0.1em', marginBottom: 12, fontFamily: 'JetBrains Mono, monospace' }}>ORPHANED LINKS</div>
+          {orphanLinks.map(link => (
+            <div key={link.childId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace' }}>{link.childId.slice(0, 24)}… → {link.parentId.slice(0, 16)}…</span>
+              <button onClick={() => onClearChain(link.childId)}
+                style={{ fontSize: 10, color: 'rgba(224,92,92,0.5)', background: 'transparent', border: '1px solid rgba(224,92,92,0.15)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace' }}>
+                remove
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
