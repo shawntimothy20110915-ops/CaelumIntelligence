@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 
 interface Session { token: string; email: string; name: string }
 interface ApprovalItem { id: string; agentName: string; action: string; resource: string; risk: 'high' | 'medium' | 'low'; status: string; requestedAt: string }
-interface LedgerEvent { id: string; action: string; actor: string; agentName: string; resource: string; ts: string; hash: string }
 interface Passport { id: string; agentName: string; status: string; permissions: string[]; expiresAt: string }
 
 const API = 'https://agentpassv22.vercel.app/api'
@@ -22,30 +21,16 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
-function fmtTs(iso: string): string {
-  try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }
-  catch { return iso }
-}
-
 function riskColor(risk: string) {
   if (risk === 'high') return '#e05c5c'
   if (risk === 'medium') return 'var(--gold)'
   return '#5a9f6a'
 }
 
-function actionColor(action: string) {
-  const a = action.toLowerCase()
-  if (a.includes('deny') || a.includes('reject') || a.includes('revoke')) return '#e05c5c'
-  if (a.includes('approve') || a.includes('mint') || a.includes('grant')) return '#5a9f6a'
-  if (a.includes('request') || a.includes('pending')) return 'var(--gold)'
-  return 'rgba(244,236,221,0.5)'
-}
-
 const navItems = [
   { key: 'dashboard', label: 'Overview', icon: '◈' },
   { key: 'passports', label: 'Passports', icon: '⬡' },
   { key: 'approvals', label: 'Approvals', icon: '⊙' },
-  { key: 'ledger', label: 'Ledger', icon: '≡' },
 ] as const
 
 type NavKey = typeof navItems[number]['key']
@@ -58,8 +43,6 @@ export default function Dashboard() {
   const [approvalsLoading, setApprovalsLoading] = useState(true)
   const [decidingId, setDecidingId] = useState<string | null>(null)
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set())
-  const [events, setEvents] = useState<LedgerEvent[]>([])
-  const [ledgerLoading, setLedgerLoading] = useState(true)
   const [passports, setPassports] = useState<Passport[]>([])
   const [passportsLoading, setPassportsLoading] = useState(true)
   const [showMintForm, setShowMintForm] = useState(false)
@@ -87,15 +70,6 @@ export default function Dashboard() {
     } catch {} finally { setApprovalsLoading(false) }
   }, [])
 
-  const fetchLedger = useCallback(async (token: string) => {
-    try {
-      const r = await fetch(`${API}/ledger/events?limit=20`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!r.ok) return
-      const data = await r.json()
-      setEvents(data.events ?? [])
-    } catch {} finally { setLedgerLoading(false) }
-  }, [])
-
   const fetchPassports = useCallback(async (token: string) => {
     try {
       const r = await fetch(`${API}/passport/list`, { headers: { Authorization: `Bearer ${token}` } })
@@ -108,11 +82,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session) return
     const { token } = session
-    fetchApprovals(token); fetchLedger(token); fetchPassports(token)
+    fetchApprovals(token); fetchPassports(token)
     const t1 = setInterval(() => fetchApprovals(token), 15_000)
-    const t2 = setInterval(() => fetchLedger(token), 10_000)
-    return () => { clearInterval(t1); clearInterval(t2) }
-  }, [session, fetchApprovals, fetchLedger, fetchPassports])
+    return () => { clearInterval(t1) }
+  }, [session, fetchApprovals, fetchPassports])
 
   async function decide(id: string, decision: 'approve' | 'deny') {
     if (!session || decidingId) return
@@ -129,7 +102,7 @@ export default function Dashboard() {
           setApprovals(prev => prev.filter(a => a.id !== id))
           setFadingIds(prev => { const n = new Set(prev); n.delete(id); return n })
         }, 400)
-        fetchLedger(session.token)
+        fetchApprovals(session.token)
       }
     } catch {} finally { setDecidingId(null) }
   }
@@ -146,7 +119,7 @@ export default function Dashboard() {
       const data = await r.json()
       if (!r.ok) { setMintError(data?.error ?? 'Mint failed'); return }
       setShowMintForm(false); setMintName(''); setMintPerms(new Set())
-      fetchPassports(session.token); fetchLedger(session.token)
+      fetchPassports(session.token)
     } catch { setMintError('Network error') } finally { setMinting(false) }
   }
 
@@ -155,13 +128,10 @@ export default function Dashboard() {
   const showDash = activeNav === 'dashboard'
   const showPassports = activeNav === 'passports'
   const showApprovals = activeNav === 'approvals'
-  const showLedger = activeNav === 'ledger'
-
   const headerMap: Record<NavKey, { title: string; sub: string }> = {
-    dashboard: { title: 'Overview', sub: 'Live trust metrics and pending decisions' },
+    dashboard: { title: 'Overview', sub: 'Your agents and pending decisions' },
     passports: { title: 'Passports', sub: 'Manage agent identity certificates' },
     approvals: { title: 'Approval Queue', sub: 'Review and decide on pending agent actions' },
-    ledger: { title: 'Action Ledger', sub: 'Immutable audit trail of every decision' },
   }
 
   return (
@@ -273,13 +243,13 @@ export default function Dashboard() {
             <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
               {/* KPI Strip — derived from user's own data */}
               {(() => {
-                const loading = approvalsLoading || ledgerLoading || passportsLoading
+                const loading = approvalsLoading || passportsLoading
                 const activePassports = passports.filter(p => p.status === 'active').length
                 const kpis = [
                   { label: 'Passports', val: passports.length, sub: `${activePassports} active` },
-                  { label: 'Ledger Events', val: events.length, sub: 'recorded actions' },
                   { label: 'Pending Approvals', val: approvals.length, sub: 'awaiting review' },
-                  { label: 'Decisions Made', val: events.filter(e => e.action.toLowerCase().includes('approve') || e.action.toLowerCase().includes('deny')).length, sub: 'approve / deny' },
+                  { label: 'Approved', val: approvals.filter(a => a.status === 'approved').length, sub: 'approved actions' },
+                  { label: 'Denied', val: approvals.filter(a => a.status === 'denied').length, sub: 'denied actions' },
                 ] as { label: string; val: number; sub: string }[]
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
@@ -300,21 +270,14 @@ export default function Dashboard() {
                 )
               })()}
 
-              {/* Two-col panels */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+              {/* Approvals panel */}
+              <div style={{ marginBottom: 32 }}>
                 <div className="panel">
                   <div className="panel-header">
                     <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(244,236,221,0.5)' }}>Pending Approvals</span>
                     <span style={{ fontSize: 10, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace' }}>↻ 15s</span>
                   </div>
                   <ApprovalsList approvals={approvals} loading={approvalsLoading} fadingIds={fadingIds} decidingId={decidingId} onDecide={decide} />
-                </div>
-                <div className="panel">
-                  <div className="panel-header">
-                    <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(244,236,221,0.5)' }}>Recent Events</span>
-                    <span style={{ fontSize: 10, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace' }}>↻ 10s</span>
-                  </div>
-                  <LedgerList events={events} loading={ledgerLoading} />
                 </div>
               </div>
 
@@ -336,18 +299,6 @@ export default function Dashboard() {
                   <span style={{ fontSize: 10, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace' }}>Auto-refresh 15s</span>
                 </div>
                 <ApprovalsList approvals={approvals} loading={approvalsLoading} fadingIds={fadingIds} decidingId={decidingId} onDecide={decide} />
-              </div>
-            </motion.div>
-          )}
-
-          {showLedger && (
-            <motion.div key="ledger" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-              <div className="panel">
-                <div className="panel-header">
-                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(244,236,221,0.5)' }}>Action Ledger</span>
-                  <span style={{ fontSize: 10, color: 'rgba(244,236,221,0.25)', fontFamily: 'JetBrains Mono, monospace' }}>Auto-refresh 10s</span>
-                </div>
-                <LedgerList events={events} loading={ledgerLoading} full />
               </div>
             </motion.div>
           )}
@@ -402,36 +353,6 @@ function ApprovalsList({ approvals, loading, fadingIds, decidingId, onDecide }: 
               <button disabled={!!decidingId} onClick={() => onDecide(item.id, 'deny')}
                 style={{ flex: 1, padding: '7px 0', background: 'transparent', border: '1px solid #e05c5c', borderRadius: 6, color: '#e05c5c', fontSize: 11, fontWeight: 700, cursor: decidingId ? 'not-allowed' : 'pointer', opacity: decidingId && decidingId !== item.id ? 0.35 : 1, transition: 'all 0.15s', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Deny</button>
             </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-function LedgerList({ events, loading, full }: { events: LedgerEvent[]; loading: boolean; full?: boolean }) {
-  if (loading) return <div style={{ padding: '32px 22px', textAlign: 'center', color: 'rgba(244,236,221,0.25)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em' }}>LOADING…</div>
-  if (events.length === 0) return <div style={{ padding: '32px 22px', textAlign: 'center', color: 'rgba(244,236,221,0.2)', fontSize: 12 }}>No events recorded</div>
-  const list = full ? events : events.slice(0, 8)
-  return (
-    <div style={{ maxHeight: full ? 'none' : 380, overflowY: full ? 'visible' : 'auto' }}>
-      <AnimatePresence initial={false}>
-        {list.map(ev => (
-          <motion.div
-            key={ev.id}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            style={{ padding: '10px 22px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 12 }}
-          >
-            <div style={{ flexShrink: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(244,236,221,0.25)', width: 60 }}>{fmtTs(ev.ts)}</div>
-            <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: actionColor(ev.action), background: `${actionColor(ev.action)}14`, padding: '2px 7px', borderRadius: 4, minWidth: 72, textAlign: 'center' }}>{ev.action}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>{ev.agentName}</span>
-              <span style={{ fontSize: 12, color: 'rgba(244,236,221,0.3)' }}> · {ev.resource}</span>
-            </div>
-            <div style={{ flexShrink: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(244,236,221,0.2)' }}>{(ev.hash ?? '').slice(0, 8)}</div>
           </motion.div>
         ))}
       </AnimatePresence>
