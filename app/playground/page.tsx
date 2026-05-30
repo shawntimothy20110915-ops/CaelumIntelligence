@@ -1,84 +1,125 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { ParticleField, AnimatedGradient } from '@/components/blocks/particle-field'
 
 type Passport = { id: string; label: string; agentId: string }
-type Result = { activityId: string; action: string; amount?: number; merchant?: string; originalDecision?: string; wouldApprove: boolean; reason: string }
+type R = { activityId: string; wouldApprove: boolean; amount?: number }
 
 export default function PlaygroundPage() {
   const [passports, setPassports] = useState<Passport[]>([])
   const [selected, setSelected] = useState('')
-  const [maxAmount, setMaxAmount] = useState('500')
-  const [merchants, setMerchants] = useState('')
-  const [results, setResults] = useState<Result[]>([])
-  const [summary, setSummary] = useState<{ total: number; wouldApprove: number; wouldDeny: number } | null>(null)
+  const [maxAmount, setMaxAmount] = useState(500)
+  const [results, setResults] = useState<R[]>([])
+  const [summary, setSummary] = useState({ total:0, wouldApprove:0, wouldDeny:0 })
 
   useEffect(() => {
-    fetch('/api/passport/mint').then(r => r.json()).then(d => { setPassports(d.passports); setSelected(d.passports[0]?.id || '') })
+    fetch('/api/passport/mint').then(r => r.json()).then(d => {
+      setPassports(d.passports); setSelected(d.passports[0]?.id || '')
+    })
   }, [])
 
-  async function run() {
-    const hypothesis: { maxAmount?: number; allowedMerchants?: string[] } = {}
-    if (maxAmount) hypothesis.maxAmount = Number(maxAmount)
-    if (merchants.trim()) hypothesis.allowedMerchants = merchants.split(',').map(m => m.trim()).filter(Boolean)
-    const r = await fetch('/api/playground', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ passportId: selected, hypothesis }) })
-    const d = await r.json()
-    setResults(d.results)
-    setSummary({ total: d.total, wouldApprove: d.wouldApprove, wouldDeny: d.wouldDeny })
-  }
+  useEffect(() => {
+    if (!selected) return
+    const t = setTimeout(async () => {
+      const r = await fetch('/api/playground', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ passportId: selected, hypothesis: { maxAmount } }),
+      })
+      const d = await r.json()
+      setResults(d.results || []); setSummary({ total: d.total, wouldApprove: d.wouldApprove, wouldDeny: d.wouldDeny })
+    }, 200)
+    return () => clearTimeout(t)
+  }, [selected, maxAmount])
+
+  const pctApprove = summary.total ? (summary.wouldApprove / summary.total) * 100 : 0
+  const pctDeny    = summary.total ? (summary.wouldDeny    / summary.total) * 100 : 0
 
   return (
-    <main style={{ background:'#0a0a0a', color:'#fff', minHeight:'100vh', padding:40, fontFamily:'-apple-system,Segoe UI,sans-serif' }}>
-      <div style={{ maxWidth:900, margin:'0 auto' }}>
-        <h1 style={{ fontSize:32, fontWeight:700, marginBottom:6 }}>Policy Playground</h1>
-        <p style={{ color:'#888', marginBottom:32 }}>Test a proposed policy against historical actions — without committing to it.</p>
+    <main style={{ background:'#000', minHeight:'100vh', overflow:'hidden', position:'relative' }}>
+      <AnimatedGradient />
+      <ParticleField count={50} color="#6366f1" />
 
-        <div style={{ background:'#141414', borderRadius:12, padding:24, marginBottom:24 }}>
-          <Label>Passport</Label>
-          <select value={selected} onChange={e => setSelected(e.target.value)} style={input}>
-            {passports.map(p => <option key={p.id} value={p.id}>{p.label} ({p.id.slice(0,12)})</option>)}
-          </select>
-          <Label>Max Amount ($)</Label>
-          <input type="number" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} style={input} />
-          <Label>Allowed Merchants (comma-sep)</Label>
-          <input value={merchants} onChange={e => setMerchants(e.target.value)} placeholder="whole-foods, target" style={input} />
-          <button onClick={run} style={btn}>Replay against history</button>
+      <div style={{ position:'relative', zIndex:1, padding:40, maxWidth:1100, margin:'0 auto' }}>
+
+        {/* Passport selector — dots */}
+        <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', gap:10, marginBottom:32, justifyContent:'center' }}>
+          {passports.map(p => (
+            <motion.button
+              key={p.id} onClick={() => setSelected(p.id)}
+              whileHover={{ scale:1.1 }} whileTap={{ scale:0.95 }}
+              style={{
+                width:48, height:48, borderRadius:'50%',
+                background: selected === p.id ? '#6366f1' : '#141414',
+                border:`2px solid ${selected === p.id ? '#fff' : '#333'}`,
+                cursor:'pointer', boxShadow: selected === p.id ? '0 0 24px #6366f1' : 'none',
+              }}
+              title={p.label}
+            />
+          ))}
+        </motion.div>
+
+        {/* Slider for maxAmount — visual */}
+        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.2 }}
+          style={{ background:'rgba(20,20,20,0.6)', backdropFilter:'blur(12px)', border:'1px solid #222', borderRadius:16, padding:32, marginBottom:32 }}>
+          <motion.div style={{ fontSize:64, fontWeight:800, color:'#fff', fontFamily:'monospace', textAlign:'center', marginBottom:20 }}>
+            ${maxAmount}
+          </motion.div>
+          <input
+            type="range" min="10" max="2000" step="10" value={maxAmount}
+            onChange={e => setMaxAmount(Number(e.target.value))}
+            style={{ width:'100%', accentColor:'#6366f1' }}
+          />
+        </motion.div>
+
+        {/* Live bar chart */}
+        <div style={{ display:'flex', gap:20, alignItems:'flex-end', height:200, marginBottom:32 }}>
+          <Bar label="✓" pct={pctApprove} color="#10b981" count={summary.wouldApprove} />
+          <Bar label="✗" pct={pctDeny}    color="#ef4444" count={summary.wouldDeny} />
         </div>
 
-        {summary && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 }}>
-            <Stat label="Total" v={summary.total} color="#6366f1" />
-            <Stat label="Would Approve" v={summary.wouldApprove} color="#10b981" />
-            <Stat label="Would Deny" v={summary.wouldDeny} color="#ef4444" />
-          </div>
-        )}
-
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {results.map(r => {
-            const c = r.wouldApprove ? '#10b981' : '#ef4444'
-            return (
-              <div key={r.activityId} style={{ background:'#141414', borderLeft:`3px solid ${c}`, borderRadius:6, padding:'10px 14px', display:'flex', justifyContent:'space-between' }}>
-                <div style={{ fontSize:13 }}>{r.action} {r.merchant ? `@ ${r.merchant}` : ''} {r.amount ? `$${r.amount}` : ''} — <span style={{ color:'#666' }}>{r.reason}</span></div>
-                <span style={{ color: c, fontSize:12, fontWeight:600 }}>{r.wouldApprove ? '✓' : '✗'}</span>
-              </div>
-            )
-          })}
-        </div>
+        {/* Result dots grid */}
+        <motion.div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
+          <AnimatePresence>
+            {results.map((r, i) => (
+              <motion.div
+                key={r.activityId}
+                initial={{ scale:0, opacity:0 }}
+                animate={{ scale:1, opacity:1 }}
+                exit={{ scale:0, opacity:0 }}
+                transition={{ delay: i * 0.02, type:'spring', stiffness:200 }}
+                whileHover={{ scale:1.5, y:-4 }}
+                style={{
+                  width:24, height:24, borderRadius:'50%',
+                  background: r.wouldApprove ? '#10b981' : '#ef4444',
+                  boxShadow: `0 0 8px ${r.wouldApprove ? '#10b981' : '#ef4444'}88`,
+                }}
+              />
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </div>
     </main>
   )
 }
 
-const input: React.CSSProperties = { background:'#0a0a0a', border:'1px solid #2a2a2a', color:'#fff', padding:'10px 12px', borderRadius:6, width:'100%', marginBottom:14 }
-const btn: React.CSSProperties = { background:'#6366f1', color:'#fff', border:0, padding:'10px 20px', borderRadius:6, fontWeight:600, cursor:'pointer' }
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize:11, color:'#666', letterSpacing:2, marginBottom:6, marginTop:6 }}>{String(children).toUpperCase()}</div>
-}
-function Stat({ label, v, color }: { label: string; v: number; color: string }) {
+function Bar({ label, pct, color, count }: { label: string; pct: number; color: string; count: number }) {
   return (
-    <div style={{ background:'#141414', borderRadius:8, padding:16 }}>
-      <div style={{ fontSize:10, color:'#666', letterSpacing:2, marginBottom:4 }}>{label}</div>
-      <div style={{ fontSize:28, fontWeight:700, color }}>{v}</div>
-    </div>
+    <motion.div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', height:'100%', justifyContent:'flex-end' }}>
+      <motion.div
+        animate={{ height: `${Math.max(2, pct)}%` }} transition={{ type:'spring', stiffness:80, damping:14 }}
+        style={{
+          width:'80%', background:`linear-gradient(180deg, ${color}, ${color}44)`,
+          borderRadius:'12px 12px 4px 4px', boxShadow:`0 0 30px ${color}66`,
+          display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:8,
+        }}
+      >
+        <motion.div key={count} initial={{ scale:0.5, opacity:0 }} animate={{ scale:1, opacity:1 }}
+          style={{ color:'#fff', fontFamily:'monospace', fontWeight:700, fontSize:24 }}>
+          {count}
+        </motion.div>
+      </motion.div>
+      <div style={{ fontSize:32, color, marginTop:8 }}>{label}</div>
+    </motion.div>
   )
 }

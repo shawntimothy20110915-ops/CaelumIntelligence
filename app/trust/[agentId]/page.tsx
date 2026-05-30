@@ -1,69 +1,131 @@
 'use client'
 import { useEffect, useState, use } from 'react'
+import { motion, useMotionValue, useTransform, animate } from 'motion/react'
+import { ParticleField, AnimatedGradient } from '@/components/blocks/particle-field'
 
-type TrustScore = { agentId: string; score: number; approvals: number; denials: number; disputes: number; bondUsd: number; ageDays: number; badges: string[] }
+type TrustScore = { agentId: string; score: number; approvals: number; denials: number; disputes: number; ageDays: number; badges: string[] }
 type Passport = { id: string; label: string; agentId: string }
 
-export default function TrustProfilePage({ params }: { params: Promise<{ agentId: string }> }) {
+export default function TrustPage({ params }: { params: Promise<{ agentId: string }> }) {
   const { agentId } = use(params)
   const [score, setScore] = useState<TrustScore | null>(null)
   const [passport, setPassport] = useState<Passport | null>(null)
+  const counter = useMotionValue(0)
+  const rounded = useTransform(counter, v => Math.round(v))
 
   useEffect(() => {
     fetch(`/api/trust-score?agentId=${agentId}`).then(r => r.json()).then(d => {
-      if (d.score) { setScore(d.score); setPassport(d.passport) }
+      if (d.score) {
+        setScore(d.score); setPassport(d.passport)
+        animate(counter, d.score.score, { duration: 1.8, ease:'easeOut' })
+      }
     })
-  }, [agentId])
+  }, [agentId, counter])
 
-  if (!score || !passport) return <main style={{ background:'#0a0a0a', color:'#888', padding:40, minHeight:'100vh' }}>Loading…</main>
+  if (!score || !passport) return <main style={{ background:'#000', minHeight:'100vh' }}><ParticleField /></main>
 
-  const tier = score.score >= 800 ? 'EXCELLENT' : score.score >= 600 ? 'GOOD' : score.score >= 400 ? 'FAIR' : 'POOR'
   const color = score.score >= 800 ? '#10b981' : score.score >= 600 ? '#3b82f6' : score.score >= 400 ? '#f59e0b' : '#ef4444'
+  const pct = score.score / 1000
 
   return (
-    <main style={{ background:'#0a0a0a', color:'#fff', minHeight:'100vh', padding:40, fontFamily:'-apple-system,Segoe UI,sans-serif' }}>
-      <div style={{ maxWidth:780, margin:'0 auto' }}>
-        <div style={{ fontSize:11, color:'#666', letterSpacing:2, marginBottom:6 }}>AGENTPASS TRUST PROFILE</div>
-        <h1 style={{ fontSize:36, fontWeight:700, marginBottom:4 }}>{passport.label}</h1>
-        <div style={{ color:'#888', fontFamily:'monospace', marginBottom:32 }}>{passport.agentId}</div>
+    <main style={{ background:'#000', minHeight:'100vh', overflow:'hidden', position:'relative' }}>
+      <AnimatedGradient />
+      <ParticleField count={50} color={color} />
 
-        <div style={{ background:'#141414', borderRadius:12, padding:32, marginBottom:24, border:`2px solid ${color}44` }}>
-          <div style={{ display:'flex', alignItems:'baseline', gap:12, marginBottom:8 }}>
-            <div style={{ fontSize:72, fontWeight:800, color }}>{score.score}</div>
-            <div style={{ fontSize:24, color:'#666' }}>/ 1000</div>
+      <div style={{ position:'relative', zIndex:1, minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40 }}>
+
+        {/* Big animated ring */}
+        <motion.div
+          initial={{ scale:0, rotate:-90 }} animate={{ scale:1, rotate:0 }}
+          transition={{ type:'spring', stiffness:80, damping:14 }}
+          style={{ position:'relative', width:360, height:360, marginBottom:40 }}
+        >
+          {/* outer pulse rings */}
+          {[0, 1, 2].map(i => (
+            <motion.div
+              key={i}
+              animate={{ scale:[1, 1.4], opacity:[0.4, 0] }}
+              transition={{ duration:2.5, repeat:Infinity, delay: i * 0.8 }}
+              style={{ position:'absolute', inset:0, borderRadius:'50%', border:`2px solid ${color}` }}
+            />
+          ))}
+
+          <svg width="360" height="360" viewBox="0 0 360 360" style={{ position:'absolute', inset:0, transform:'rotate(-90deg)' }}>
+            <circle cx="180" cy="180" r="160" fill="none" stroke="#222" strokeWidth="12" />
+            <motion.circle
+              cx="180" cy="180" r="160" fill="none"
+              stroke={color} strokeWidth="12" strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 160}
+              initial={{ strokeDashoffset: 2 * Math.PI * 160 }}
+              animate={{ strokeDashoffset: 2 * Math.PI * 160 * (1 - pct) }}
+              transition={{ duration:1.8, ease:'easeOut' }}
+              style={{ filter:`drop-shadow(0 0 12px ${color})` }}
+            />
+          </svg>
+
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+            <motion.div style={{ fontSize:96, fontWeight:900, color, fontFamily:'monospace' }}>
+              {rounded}
+            </motion.div>
+            <motion.div
+              initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:1.8 }}
+              style={{ display:'flex', gap:6, marginTop:8 }}
+            >
+              {[...Array(5)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay: 1.8 + i*0.1, type:'spring' }}
+                  style={{ width:8, height:8, borderRadius:'50%', background: i < Math.ceil(pct*5) ? color : '#222' }}
+                />
+              ))}
+            </motion.div>
           </div>
-          <div style={{ fontSize:14, fontWeight:600, color, letterSpacing:2 }}>{tier}</div>
+        </motion.div>
+
+        {/* Orbiting badges */}
+        <div style={{ display:'flex', gap:16, marginBottom:32 }}>
+          {score.badges.map((b, i) => (
+            <motion.div
+              key={b}
+              initial={{ scale:0, rotate:180 }} animate={{ scale:1, rotate:0 }}
+              transition={{ delay: 0.5 + i*0.15, type:'spring', stiffness:150 }}
+              whileHover={{ scale:1.2, rotate:10 }}
+              style={{
+                width:56, height:56, borderRadius:'50%',
+                background:`radial-gradient(circle, ${color}44, ${color}11)`,
+                border:`2px solid ${color}`,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:24, boxShadow:`0 0 24px ${color}66`,
+              }}
+            >
+              {b === 'trusted' ? '⬢' : b === 'veteran' ? '◆' : b === 'clean' ? '✦' : '★'}
+            </motion.div>
+          ))}
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 }}>
-          <Stat label="APPROVALS" value={score.approvals} color="#10b981" />
-          <Stat label="DENIALS"   value={score.denials}   color="#ef4444" />
-          <Stat label="DISPUTES"  value={score.disputes}  color="#f59e0b" />
-          <Stat label="AGE"       value={`${score.ageDays}d`} color="#3b82f6" />
-        </div>
-
-        {score.badges.length > 0 && (
-          <div style={{ marginBottom:24 }}>
-            <div style={{ fontSize:11, color:'#666', letterSpacing:2, marginBottom:10 }}>BADGES</div>
-            <div style={{ display:'flex', gap:8 }}>
-              {score.badges.map(b => <span key={b} style={{ background:'#1e293b', color:'#60a5fa', padding:'6px 14px', borderRadius:20, fontSize:13, fontWeight:600, textTransform:'uppercase' }}>{b}</span>)}
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop:32, padding:'16px 20px', background:'#0f172a', borderRadius:8, fontSize:13, color:'#888' }}>
-          Embed: <code style={{ color:'#60a5fa' }}>{`<img src="/api/embed?agentId=${agentId}" />`}</code>
+        {/* Stat bars (no labels) */}
+        <div style={{ display:'flex', gap:12, alignItems:'flex-end', height:120 }}>
+          <StatBar value={score.approvals} max={Math.max(score.approvals, score.denials, score.disputes, 1)} color="#10b981" delay={0.2} />
+          <StatBar value={score.denials}   max={Math.max(score.approvals, score.denials, score.disputes, 1)} color="#ef4444" delay={0.4} />
+          <StatBar value={score.disputes}  max={Math.max(score.approvals, score.denials, score.disputes, 1)} color="#f59e0b" delay={0.6} />
+          <StatBar value={score.ageDays}   max={365} color="#3b82f6" delay={0.8} />
         </div>
       </div>
     </main>
   )
 }
 
-function Stat({ label, value, color }: { label: string; value: number | string; color: string }) {
+function StatBar({ value, max, color, delay }: { value: number; max: number; color: string; delay: number }) {
   return (
-    <div style={{ background:'#141414', borderRadius:8, padding:'18px 16px' }}>
-      <div style={{ fontSize:10, color:'#666', letterSpacing:2, marginBottom:6 }}>{label}</div>
-      <div style={{ fontSize:24, fontWeight:700, color }}>{value}</div>
-    </div>
+    <motion.div
+      initial={{ height:0, opacity:0 }}
+      animate={{ height: 4 + (value / max) * 100, opacity:1 }}
+      transition={{ delay, duration:1, ease:'easeOut' }}
+      whileHover={{ scaleY:1.1 }}
+      style={{
+        width:32, background:`linear-gradient(180deg, ${color}, ${color}66)`,
+        borderRadius:6, boxShadow:`0 0 16px ${color}66`,
+      }}
+    />
   )
 }
