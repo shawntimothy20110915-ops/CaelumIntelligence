@@ -203,7 +203,27 @@ export default function Home() {
         <div style={{ fontFamily: "'JetBrains Mono', monospace", color: 'rgba(212,163,90,0.85)', fontSize: 14, letterSpacing: '0.18em', fontWeight: 500 }}>
           AGENTPASS
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
+          {[
+            { href: '/live',        label: 'live',        icon: '◉' },
+            { href: '/onboard',     label: 'onboard',     icon: '✦' },
+            { href: '/playground',  label: 'playground',  icon: '◆' },
+            { href: '/marketplace', label: 'marketplace', icon: '⬢' },
+            { href: '/dashboard',   label: 'dashboard',   icon: '⌬' },
+          ].map(l => (
+            <motion.a key={l.href} href={l.href}
+              whileHover={{ color: 'rgba(212,163,90,0.95)', y: -1 }}
+              style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                color: 'rgba(244,236,221,0.45)', fontSize: 12,
+                fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em',
+                textDecoration:'none', transition:'color 0.2s',
+              }}
+            >
+              <span style={{ color:'rgba(212,163,90,0.6)' }}>{l.icon}</span>{l.label}
+            </motion.a>
+          ))}
+          <div style={{ width:1, height:18, background:'rgba(212,163,90,0.15)', margin:'0 6px' }} />
           <motion.a
             href="/auth"
             whileHover={{ color: 'rgba(244,236,221,0.8)' }}
@@ -211,7 +231,7 @@ export default function Home() {
           >
             sign in
           </motion.a>
-          <LiquidButton size="sm" onClick={() => { window.location.href = '/auth' }}>
+          <LiquidButton size="sm" onClick={() => { window.location.href = '/onboard' }}>
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.1em', color: 'rgba(244,236,221,0.88)', fontWeight: 500 }}>
               Get access
             </span>
@@ -336,6 +356,71 @@ export default function Home() {
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {FEATURES.map((f, i) => <FeatureCard key={f.label} feature={f} i={i} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Explore the live pages ───────────────────── */}
+      <section className="relative py-32" style={{ background: '#0a0a0d' }}>
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            className="mb-12 text-center"
+          >
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgba(212,163,90,0.45)', letterSpacing: '0.22em', textTransform: 'uppercase' }}>
+              Explore Live
+            </span>
+            <div style={{ fontFamily: "'Instrument Serif', serif", fontStyle:'italic', fontSize: 38, color:'rgba(244,236,221,0.94)', marginTop: 10 }}>
+              Six surfaces. One trust layer.
+            </div>
+          </motion.div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            {[
+              { href:'/live',                label:'Live',         icon:'◉', sub:'Real-time signal',     c:'rgba(16,185,129,0.6)' },
+              { href:'/onboard',             label:'Onboard',      icon:'✦', sub:'60-sec wizard',        c:'rgba(99,102,241,0.6)' },
+              { href:'/playground',          label:'Playground',   icon:'◆', sub:'Replay any policy',    c:'rgba(245,158,11,0.6)' },
+              { href:'/marketplace',         label:'Marketplace',  icon:'⬢', sub:'Install policy packs', c:'rgba(212,163,90,0.6)' },
+              { href:'/trust/drift-7af2',    label:'Trust Profile',icon:'★', sub:'Live reputation',      c:'rgba(59,130,246,0.6)' },
+              { href:'/verify/rcpt-9114',    label:'Verify',       icon:'✓', sub:'Receipt authenticity', c:'rgba(236,72,153,0.6)' },
+            ].map((t, i) => (
+              <motion.a key={t.href} href={t.href}
+                initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
+                transition={{ delay: i * 0.06, type:'spring', stiffness:90 }}
+                whileHover={{ y:-6, scale:1.02 }}
+                style={{
+                  position:'relative', overflow:'hidden', display:'block',
+                  padding:24, borderRadius:16, textDecoration:'none',
+                  background:'rgba(20,20,20,0.5)', backdropFilter:'blur(12px)',
+                  border:`1px solid rgba(212,163,90,0.18)`,
+                  boxShadow:`0 0 24px ${t.c}11`,
+                }}
+              >
+                <motion.div
+                  aria-hidden
+                  animate={{ opacity:[0.1, 0.3, 0.1] }}
+                  transition={{ duration:3, repeat:Infinity, delay: i * 0.4 }}
+                  style={{ position:'absolute', inset:0, background:`radial-gradient(circle at 30% 0%, ${t.c}, transparent 60%)` }}
+                />
+                <div style={{ position:'relative', display:'flex', alignItems:'center', gap:14 }}>
+                  <motion.div
+                    whileHover={{ rotate:360 }}
+                    transition={{ duration:0.8 }}
+                    style={{
+                      width:52, height:52, borderRadius:12,
+                      background:`linear-gradient(135deg, ${t.c}, ${t.c.replace('0.6','0.1')})`,
+                      border:`1px solid ${t.c}`,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:24, color:'#fff',
+                    }}
+                  >{t.icon}</motion.div>
+                  <div>
+                    <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, fontStyle:'italic', color:'rgba(244,236,221,0.96)' }}>{t.label}</div>
+                    <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:'rgba(244,236,221,0.45)', letterSpacing:'0.08em', marginTop:2 }}>{t.sub}</div>
+                  </div>
+                  <motion.div style={{ marginLeft:'auto', color:'rgba(212,163,90,0.6)', fontSize:20 }} whileHover={{ x:4 }}>→</motion.div>
+                </div>
+              </motion.a>
+            ))}
           </div>
         </div>
       </section>
