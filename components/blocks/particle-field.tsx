@@ -1,16 +1,19 @@
 'use client'
 import { motion } from 'motion/react'
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 
 export function ParticleField({ count = 40, color = '#6366f1' }: { count?: number; color?: string }) {
-  const dots = useMemo(() => Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: 1 + Math.random() * 3,
-    delay: Math.random() * 4,
-    dur: 6 + Math.random() * 8,
-  })), [count])
+  const [dots, setDots] = useState<Array<{ id:number; x:number; y:number; size:number; delay:number; dur:number }>>([])
+  useEffect(() => {
+    setDots(Array.from({ length: count }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: 1 + Math.random() * 3,
+      delay: Math.random() * 4,
+      dur: 6 + Math.random() * 8,
+    })))
+  }, [count])
   return (
     <div style={{ position:'fixed', inset:0, pointerEvents:'none', overflow:'hidden', zIndex:0 }}>
       {dots.map(d => (

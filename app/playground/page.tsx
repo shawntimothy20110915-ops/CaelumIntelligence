@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { ParticleField, AnimatedGradient } from '@/components/blocks/particle-field'
+import { BrandFrame } from '@/components/blocks/brand-frame'
+import { brand } from '@/lib/brand'
 
 type Passport = { id: string; label: string; agentId: string }
 type R = { activityId: string; wouldApprove: boolean; amount?: number }
@@ -32,74 +33,60 @@ export default function PlaygroundPage() {
     return () => clearTimeout(t)
   }, [selected, maxAmount])
 
-  const pctApprove = summary.total ? (summary.wouldApprove / summary.total) * 100 : 0
-  const pctDeny    = summary.total ? (summary.wouldDeny    / summary.total) * 100 : 0
+  const pctA = summary.total ? (summary.wouldApprove / summary.total) * 100 : 0
+  const pctD = summary.total ? (summary.wouldDeny    / summary.total) * 100 : 0
 
   return (
-    <main style={{ background:'#000', minHeight:'100vh', overflow:'hidden', position:'relative' }}>
-      <AnimatedGradient />
-      <ParticleField count={50} color="#6366f1" />
-
-      <div style={{ position:'relative', zIndex:1, padding:40, maxWidth:1100, margin:'0 auto' }}>
-
-        {/* Passport selector — dots */}
-        <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} style={{ display:'flex', gap:10, marginBottom:32, justifyContent:'center' }}>
+    <BrandFrame title="Policy Playground" accent={brand.colors.gold} particleCount={50}>
+      <div style={{ maxWidth:900, margin:'0 auto', padding:'0 24px' }}>
+        <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }}
+          style={{ display:'flex', gap:10, marginBottom:32, justifyContent:'center' }}>
           {passports.map(p => (
-            <motion.button
-              key={p.id} onClick={() => setSelected(p.id)}
+            <motion.button key={p.id} onClick={() => setSelected(p.id)}
               whileHover={{ scale:1.1 }} whileTap={{ scale:0.95 }}
               style={{
                 width:48, height:48, borderRadius:'50%',
-                background: selected === p.id ? '#6366f1' : '#141414',
-                border:`2px solid ${selected === p.id ? '#fff' : '#333'}`,
-                cursor:'pointer', boxShadow: selected === p.id ? '0 0 24px #6366f1' : 'none',
-              }}
-              title={p.label}
-            />
+                background: selected === p.id ? brand.colors.gold : brand.colors.surface,
+                border:`2px solid ${selected === p.id ? brand.colors.text : brand.colors.border}`,
+                cursor:'pointer',
+                boxShadow: selected === p.id ? `0 0 24px ${brand.colors.gold}` : 'none',
+              }} title={p.label} />
           ))}
         </motion.div>
 
-        {/* Slider for maxAmount — visual */}
         <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.2 }}
-          style={{ background:'rgba(20,20,20,0.6)', backdropFilter:'blur(12px)', border:'1px solid #222', borderRadius:16, padding:32, marginBottom:32 }}>
-          <motion.div style={{ fontSize:64, fontWeight:800, color:'#fff', fontFamily:'monospace', textAlign:'center', marginBottom:20 }}>
+          style={{ background: brand.colors.surface2, backdropFilter:'blur(12px)', border:`1px solid ${brand.colors.gold}22`, borderRadius: brand.radius.md, padding:32, marginBottom:32 }}>
+          <motion.div style={{ fontSize:64, fontWeight:800, color: brand.colors.text, fontFamily: brand.font.mono, textAlign:'center', marginBottom:20 }}>
             ${maxAmount}
           </motion.div>
-          <input
-            type="range" min="10" max="2000" step="10" value={maxAmount}
+          <input type="range" min="10" max="2000" step="10" value={maxAmount}
             onChange={e => setMaxAmount(Number(e.target.value))}
-            style={{ width:'100%', accentColor:'#6366f1' }}
-          />
+            style={{ width:'100%', accentColor: brand.colors.gold }} />
         </motion.div>
 
-        {/* Live bar chart */}
         <div style={{ display:'flex', gap:20, alignItems:'flex-end', height:200, marginBottom:32 }}>
-          <Bar label="✓" pct={pctApprove} color="#10b981" count={summary.wouldApprove} />
-          <Bar label="✗" pct={pctDeny}    color="#ef4444" count={summary.wouldDeny} />
+          <Bar label="✓" pct={pctA} color={brand.colors.success} count={summary.wouldApprove} />
+          <Bar label="✗" pct={pctD} color={brand.colors.danger}  count={summary.wouldDeny} />
         </div>
 
-        {/* Result dots grid */}
         <motion.div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
           <AnimatePresence>
             {results.map((r, i) => (
-              <motion.div
-                key={r.activityId}
-                initial={{ scale:0, opacity:0 }}
-                animate={{ scale:1, opacity:1 }}
+              <motion.div key={r.activityId}
+                initial={{ scale:0, opacity:0 }} animate={{ scale:1, opacity:1 }}
                 exit={{ scale:0, opacity:0 }}
                 transition={{ delay: i * 0.02, type:'spring', stiffness:200 }}
                 whileHover={{ scale:1.5, y:-4 }}
                 style={{
                   width:24, height:24, borderRadius:'50%',
-                  background: r.wouldApprove ? '#10b981' : '#ef4444',
-                  boxShadow: `0 0 8px ${r.wouldApprove ? '#10b981' : '#ef4444'}88`,
-                }}
-              />
+                  background: r.wouldApprove ? brand.colors.success : brand.colors.danger,
+                  boxShadow: `0 0 8px ${r.wouldApprove ? brand.colors.success : brand.colors.danger}88`,
+                }}/>
             ))}
           </AnimatePresence>
         </motion.div>
       </div>
-    </main>
+    </BrandFrame>
   )
 }
 
@@ -112,10 +99,9 @@ function Bar({ label, pct, color, count }: { label: string; pct: number; color: 
           width:'80%', background:`linear-gradient(180deg, ${color}, ${color}44)`,
           borderRadius:'12px 12px 4px 4px', boxShadow:`0 0 30px ${color}66`,
           display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:8,
-        }}
-      >
+        }}>
         <motion.div key={count} initial={{ scale:0.5, opacity:0 }} animate={{ scale:1, opacity:1 }}
-          style={{ color:'#fff', fontFamily:'monospace', fontWeight:700, fontSize:24 }}>
+          style={{ color: brand.colors.text, fontFamily: brand.font.mono, fontWeight:700, fontSize:24 }}>
           {count}
         </motion.div>
       </motion.div>
