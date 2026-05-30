@@ -21,7 +21,7 @@ export default function MarketplacePage() {
   useEffect(() => { fetch('/api/marketplace').then(r => r.json()).then(d => setTemplates(d.templates)) }, [])
 
   return (
-    <BrandFrame title="Marketplace" accent={brand.colors.gold} particleCount={60}>
+    <BrandFrame title="Marketplace" subtitle="Hover any card for a 3D tilt — click ↓ to install a pre-built policy pack onto your agent" accent={brand.colors.gold} particleCount={60}>
       <div style={{ maxWidth:1300, margin:'0 auto', padding:'0 40px' }}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:24 }}>
           {templates.map((t, i) => {

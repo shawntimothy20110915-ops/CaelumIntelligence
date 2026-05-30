@@ -9,6 +9,7 @@ export function BrandFrame({
   children,
   accent = brand.colors.gold,
   title,
+  subtitle,
   particleCount = 50,
   showNav = true,
   showFooter = true,
@@ -16,6 +17,7 @@ export function BrandFrame({
   children?: React.ReactNode
   accent?: string
   title?: string
+  subtitle?: string
   particleCount?: number
   showNav?: boolean
   showFooter?: boolean
@@ -56,6 +58,18 @@ export function BrandFrame({
               style={{ height:2, background: accent, margin:'14px auto 0', borderRadius:2,
                 boxShadow:`0 0 12px ${accent}` }}
             />
+            {subtitle && (
+              <motion.div
+                initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.7 }}
+                style={{
+                  marginTop:18, fontFamily: brand.font.mono, fontSize:12,
+                  color: brand.colors.subdued, letterSpacing:1.2,
+                  maxWidth:560, marginLeft:'auto', marginRight:'auto',
+                }}
+              >
+                <span style={{ color: accent, marginRight:6 }}>▸</span>{subtitle}
+              </motion.div>
+            )}
           </motion.div>
         )}
         {children}

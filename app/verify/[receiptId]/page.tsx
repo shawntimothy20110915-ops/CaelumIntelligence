@@ -16,7 +16,7 @@ export default function VerifyPage({ params }: { params: Promise<{ receiptId: st
   const color = data.verified ? brand.colors.success : brand.colors.danger
 
   return (
-    <BrandFrame title="Verification" accent={color} particleCount={80}>
+    <BrandFrame title="Verification" subtitle="Cryptographic proof that this receipt was issued by AgentPass and never altered" accent={color} particleCount={80}>
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:40, padding:'0 40px' }}>
         <motion.div
           initial={{ scale:0, rotate:-90 }} animate={{ scale:1, rotate:0 }}

@@ -33,7 +33,7 @@ export default function LivePage() {
   const review   = items.filter(i => i.decision === 'human_review').length
 
   return (
-    <BrandFrame title="Live Signal" accent={brand.colors.gold} particleCount={60}>
+    <BrandFrame title="Live Signal" subtitle="Every agent action streams in real-time — green=approved, amber=human review, red=denied" accent={brand.colors.gold} particleCount={60}>
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px' }}>
         <div style={{ display:'flex', justifyContent:'center', gap:24, marginBottom:40 }}>
           <BigStat value={approved} color={brand.colors.success} />

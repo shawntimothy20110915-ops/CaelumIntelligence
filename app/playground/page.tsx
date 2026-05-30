@@ -37,7 +37,7 @@ export default function PlaygroundPage() {
   const pctD = summary.total ? (summary.wouldDeny    / summary.total) * 100 : 0
 
   return (
-    <BrandFrame title="Policy Playground" accent={brand.colors.gold} particleCount={50}>
+    <BrandFrame title="Policy Playground" subtitle="Pick a passport (dot), drag the slider — watch how many past actions a new max-amount cap would have approved or denied" accent={brand.colors.gold} particleCount={50}>
       <div style={{ maxWidth:900, margin:'0 auto', padding:'0 24px' }}>
         <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }}
           style={{ display:'flex', gap:10, marginBottom:32, justifyContent:'center' }}>
