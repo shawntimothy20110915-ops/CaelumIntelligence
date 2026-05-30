@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getStore, appendLedgerEvent, getBilling, actionCreditCost, chargeCredits, checkRateLimit, checkAndFireAlerts, fireWebhookAlert } from '@/lib/store'
+import { getStore, appendLedgerEvent, getBilling, actionCreditCost, chargeCredits, checkRateLimit, checkAndFireAlerts, fireWebhookAlert, updateTrustScore, recordActivity, detectInjection, computeRiskScore } from '@/lib/store'
 import { generateShortId, computeHmac } from '@/lib/crypto'
 import { PLAN_RATE_LIMIT, HUMAN_REVIEW_MULTIPLIER } from '@/lib/types'
 import type { ApprovalResult, SignedReceipt } from '@/lib/types'
@@ -123,11 +123,29 @@ export async function POST(req: NextRequest) {
     fireWebhookAlert(store, billing, `action.${decision}`, { passportId, action, merchant, amount, reason })
   }
 
+  // ── R&D: trust score, activity feed, risk, adversarial scan ──────────
+  updateTrustScore(store, passport.agentId, passportId, {
+    approved: decision === 'approved',
+    denied:   decision === 'denied',
+  })
+  recordActivity(store, {
+    passportId, agentLabel: passport.label, type: eventType,
+    message: `${action}${merchant ? ' @ ' + merchant : ''}${amount ? ' $' + amount : ''}`,
+    amount, merchant, decision,
+  })
+  const trustScore = store.trustScores.get(passport.agentId)
+  const agentBio   = store.agentBios.get(passportId)
+  const risk = computeRiskScore({ amount, merchant, agentBio, trustScore, allowedMerchants: proof.constraints.allowedMerchants })
+  let injection = null
+  if (metadata && typeof metadata === 'object' && typeof metadata.userInput === 'string') {
+    injection = detectInjection(metadata.userInput)
+  }
+
   const result: ApprovalResult = {
     decision, reason, latencyMs, receiptId, eventId: event.id,
     creditsCharged: charge?.charged ?? 0,
     creditsRemaining: billing.credits,
   }
 
-  return NextResponse.json({ result, receipt })
+  return NextResponse.json({ result, receipt, trustScore, riskScore: risk, injection })
 }

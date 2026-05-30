@@ -186,6 +186,257 @@ export interface WebhookEvent {
   creditsCost: number
 }
 
+// ═══ R&D batch — 40 features ═════════════════════════════════════════════
+
+// 1. TrustScore™
+export interface TrustScore {
+  agentId: string
+  score: number              // 0..1000
+  approvals: number
+  denials: number
+  disputes: number
+  bondUsd: number
+  ageDays: number
+  lastUpdated: number
+  badges: string[]
+}
+
+// 2. AgentBio™ — behavioral biometrics
+export interface AgentBio {
+  passportId: string
+  baseline: { meanIntervalMs: number; medianAmount: number; merchantSet: string[]; actionMix: Record<string, number> }
+  recent:   { meanIntervalMs: number; medianAmount: number; merchantSet: string[]; actionMix: Record<string, number> }
+  drift: number              // 0..1
+  hijackSuspected: boolean
+  samples: number
+}
+
+// 3. ZK Compliance Proofs
+export interface ZkProof {
+  id: string
+  passportId: string
+  claim: 'budget_under' | 'spend_below' | 'plan_is'
+  publicInput: Record<string, string | number>
+  commitment: string
+  proof: string
+  verified: boolean
+  createdAt: number
+}
+
+// 4. AgentQuorum™
+export interface QuorumRequest {
+  id: string
+  passportId: string
+  action: string
+  amount?: number
+  threshold: number          // M of N
+  required: number           // N
+  signers: string[]
+  signatures: { passportId: string; signature: string; signedAt: number }[]
+  status: 'pending' | 'approved' | 'denied' | 'expired'
+  expiresAt: number
+}
+
+// 5. Confidential Policy TEE
+export interface TeeEvaluation {
+  id: string
+  passportId: string
+  proofId: string
+  enclaveAttestation: string
+  policyHash: string
+  inputHash: string
+  decision: 'approved' | 'denied' | 'human_review'
+  measurementMrenclave: string
+  evaluatedAt: number
+}
+
+// 6. A2A Payment Rails
+export interface A2APayment {
+  id: string
+  fromPassport: string
+  toPassport: string
+  amountUsd: number
+  feeUsd: number              // 1% take rate
+  status: 'escrowed' | 'released' | 'disputed' | 'refunded'
+  escrowedAt: number
+  releasedAt: number | null
+  disputeReason: string | null
+}
+
+// 7. PolicyAutoPilot
+export interface ComplianceBundle {
+  id: string
+  framework: 'soc2' | 'pci' | 'hipaa' | 'gdpr' | 'ccpa' | 'iso27001'
+  industry: string
+  generatedPolicies: Array<{ rule: string; constraint: string; rationale: string }>
+  controlsCovered: string[]
+  generatedAt: number
+}
+
+// 8. HardwarePassport
+export interface HardwareBinding {
+  passportId: string
+  hardwareFingerprint: string
+  tpmEkPub: string
+  attestedAt: number
+  attestationChain: string[]
+}
+
+// 9. AdversarialShield™
+export interface InjectionDetection {
+  id: string
+  passportId: string
+  input: string
+  score: number              // 0..1
+  flagged: boolean
+  patterns: string[]
+  detectedAt: number
+}
+
+// 10. Action Choreography
+export interface ActionDag {
+  id: string
+  passportId: string
+  proofId: string
+  steps: Array<{ id: string; action: string; merchant?: string; amount?: number; dependsOn: string[] }>
+  approved: boolean
+  committedAt: number
+  executedSteps: string[]
+  status: 'committed' | 'executing' | 'complete' | 'aborted'
+}
+
+// 11. Bonded Agents
+export interface AgentBond {
+  passportId: string
+  bondUsd: number
+  slashed: number
+  history: Array<{ ts: number; delta: number; reason: string }>
+}
+
+// 12. AgentInsurance
+export interface InsurancePolicy {
+  id: string
+  passportId: string
+  premiumUsd: number
+  coverageUsd: number
+  active: boolean
+  claims: Array<{ id: string; amount: number; reason: string; status: 'pending' | 'paid' | 'denied'; ts: number }>
+}
+
+// 13. Policy Marketplace
+export interface PolicyTemplate {
+  id: string
+  name: string
+  vendor: string
+  category: string
+  priceUsd: number
+  installs: number
+  rating: number
+  rules: Array<{ permission: string; maxAmount?: number; allowedMerchants?: string[] }>
+}
+
+// 14. NL Policy Authoring
+export interface NlPolicyResult {
+  prompt: string
+  compiled: { permissions: string[]; maxAmount?: number; allowedMerchants?: string[]; ttlHours: number }
+  confidence: number
+}
+
+// 15. FedPolicyLearn
+export interface FederatedSignal {
+  id: string
+  pattern: string
+  prevalence: number
+  contributors: number
+  publishedAt: number
+}
+
+// 16. Time-Decay Trust
+export interface TrustDecayState {
+  passportId: string
+  decayRate: number          // permissions lost per day idle
+  lastActivity: number
+  effectivePermissions: string[]
+}
+
+// 17. Honeypot Canaries
+export interface HoneypotHit {
+  id: string
+  passportId: string
+  canary: string
+  detectedAt: number
+  flagged: true
+}
+
+// 18. RiskScore 0-100
+export interface RiskScore {
+  score: number
+  reasons: string[]
+  recommendation: 'approve' | 'review' | 'deny'
+}
+
+// 19. Anti-Collusion Graph
+export interface CollusionCluster {
+  id: string
+  passportIds: string[]
+  sharedMerchants: string[]
+  suspiciousActions: number
+  detectedAt: number
+}
+
+// 20. Merkle Anchoring
+export interface MerkleAnchor {
+  id: string
+  rootHash: string
+  receiptIds: string[]
+  anchoredAt: number
+  txid: string                // simulated bitcoin/eth txid
+  chain: 'bitcoin' | 'ethereum'
+}
+
+// ─── User-facing surfaces (21–40) ────────────────────────────────────────
+
+export interface ActivityEvent {
+  id: string
+  passportId: string
+  agentLabel: string
+  type: string
+  message: string
+  amount?: number
+  merchant?: string
+  decision?: string
+  ts: number
+}
+
+export interface PolicyBlock {
+  id: string
+  kind: 'if' | 'then' | 'when' | 'limit'
+  config: Record<string, string | number | boolean>
+}
+
+export interface VisualPolicy {
+  id: string
+  name: string
+  passportId: string
+  blocks: PolicyBlock[]
+  createdAt: number
+}
+
+export interface OnboardingProgress {
+  passportId: string
+  steps: { name: string; completed: boolean }[]
+  startedAt: number
+}
+
+export interface AnomalyAlert {
+  id: string
+  passportId: string
+  severity: 'low' | 'med' | 'high'
+  message: string
+  ts: number
+  acknowledged: boolean
+}
+
 export interface SystemStatus {
   healthy: boolean
   uptime: number

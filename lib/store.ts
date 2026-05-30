@@ -1,6 +1,11 @@
 import type {
   AgentPassport, DelegationProof, LedgerEvent, SignedReceipt,
   BillingAccount, Organization, PromoCode, WebhookEvent,
+  TrustScore, AgentBio, ZkProof, QuorumRequest, TeeEvaluation, A2APayment,
+  ComplianceBundle, HardwareBinding, InjectionDetection, ActionDag,
+  AgentBond, InsurancePolicy, PolicyTemplate, FederatedSignal,
+  TrustDecayState, HoneypotHit, CollusionCluster, MerkleAnchor,
+  ActivityEvent, VisualPolicy, OnboardingProgress, AnomalyAlert,
 } from './types'
 import {
   PLAN_QUOTA, ACTION_CREDIT_COST, PROOF_TTL_CREDIT_COST,
@@ -24,6 +29,29 @@ interface Store {
   startTime:      number
   baseEventCount: number
   receiptCounter: number
+  // R&D additions
+  trustScores:        Map<string, TrustScore>
+  agentBios:          Map<string, AgentBio>
+  zkProofs:           Map<string, ZkProof>
+  quorumRequests:    Map<string, QuorumRequest>
+  teeEvaluations:    TeeEvaluation[]
+  a2aPayments:        Map<string, A2APayment>
+  compliance:         Map<string, ComplianceBundle>
+  hardwareBindings:   Map<string, HardwareBinding>
+  injections:         InjectionDetection[]
+  dags:               Map<string, ActionDag>
+  bonds:              Map<string, AgentBond>
+  insurance:          Map<string, InsurancePolicy>
+  templates:          Map<string, PolicyTemplate>
+  fedSignals:         FederatedSignal[]
+  decayStates:        Map<string, TrustDecayState>
+  honeypotHits:       HoneypotHit[]
+  collusionClusters:  CollusionCluster[]
+  merkleAnchors:      MerkleAnchor[]
+  visualPolicies:     Map<string, VisualPolicy>
+  onboardings:        Map<string, OnboardingProgress>
+  anomalies:          AnomalyAlert[]
+  activity:           ActivityEvent[]
 }
 
 export interface ApprovalQueueItem {
@@ -247,9 +275,124 @@ function initStore(): Store {
     approvalQueue: [], billing: new Map(), orgs: new Map(),
     promoCodes: new Map(), webhookEvents: [],
     seq: 0, startTime: Date.now(), baseEventCount: 847293, receiptCounter: 9115,
+    trustScores: new Map(), agentBios: new Map(), zkProofs: new Map(),
+    quorumRequests: new Map(), teeEvaluations: [], a2aPayments: new Map(),
+    compliance: new Map(), hardwareBindings: new Map(), injections: [],
+    dags: new Map(), bonds: new Map(), insurance: new Map(),
+    templates: new Map(), fedSignals: [], decayStates: new Map(),
+    honeypotHits: [], collusionClusters: [], merkleAnchors: [],
+    visualPolicies: new Map(), onboardings: new Map(), anomalies: [],
+    activity: [],
   }
   seedStore(store)
+  seedRD(store)
   return store
+}
+
+// ─── R&D helpers ─────────────────────────────────────────────────────────
+
+export function recordActivity(store: Store, ev: Omit<ActivityEvent, 'id' | 'ts'>) {
+  const a: ActivityEvent = { ...ev, id: generateShortId('act'), ts: Date.now() }
+  store.activity.unshift(a)
+  if (store.activity.length > 500) store.activity.pop()
+  return a
+}
+
+export function getOrInitTrustScore(store: Store, agentId: string, passportId: string): TrustScore {
+  const k = agentId
+  if (!store.trustScores.has(k)) {
+    const passport = store.passports.get(passportId)
+    const ageDays = passport ? Math.max(1, Math.floor((Date.now() - passport.mintedAt) / 86400000)) : 1
+    store.trustScores.set(k, {
+      agentId, score: 500, approvals: 0, denials: 0, disputes: 0, bondUsd: 0,
+      ageDays, lastUpdated: Date.now(), badges: [],
+    })
+  }
+  return store.trustScores.get(k)!
+}
+
+export function updateTrustScore(store: Store, agentId: string, passportId: string, delta: { approved?: boolean; denied?: boolean; disputed?: boolean }) {
+  const ts = getOrInitTrustScore(store, agentId, passportId)
+  if (delta.approved) { ts.approvals++; ts.score = Math.min(1000, ts.score + 2) }
+  if (delta.denied)   { ts.denials++;   ts.score = Math.max(0,   ts.score - 5) }
+  if (delta.disputed) { ts.disputes++;  ts.score = Math.max(0,   ts.score - 25) }
+  if (ts.score >= 800 && !ts.badges.includes('trusted'))    ts.badges.push('trusted')
+  if (ts.approvals >= 10 && !ts.badges.includes('veteran')) ts.badges.push('veteran')
+  if (ts.disputes === 0 && ts.approvals >= 5 && !ts.badges.includes('clean')) ts.badges.push('clean')
+  ts.lastUpdated = Date.now()
+  return ts
+}
+
+const INJECTION_PATTERNS = [
+  'ignore previous instructions', 'disregard all', 'system prompt',
+  'pretend you are', 'bypass policy', 'override constraints', '<|im_start|>',
+  'jailbreak', 'developer mode', 'sudo', 'reveal your', 'forget everything',
+]
+
+export function detectInjection(input: string): { score: number; flagged: boolean; patterns: string[] } {
+  const lower = input.toLowerCase()
+  const hits = INJECTION_PATTERNS.filter(p => lower.includes(p))
+  const score = Math.min(1, hits.length / 3)
+  return { score, flagged: hits.length > 0, patterns: hits }
+}
+
+export function computeRiskScore(args: {
+  amount?: number; merchant?: string; agentBio?: AgentBio;
+  trustScore?: TrustScore; allowedMerchants?: string[];
+}): { score: number; reasons: string[]; recommendation: 'approve' | 'review' | 'deny' } {
+  const reasons: string[] = []
+  let risk = 0
+  if (args.amount && args.amount > 1000) { risk += 25; reasons.push('high amount') }
+  if (args.amount && args.amount > 5000) { risk += 25; reasons.push('very high amount') }
+  if (args.merchant && args.allowedMerchants && !args.allowedMerchants.includes(args.merchant)) {
+    risk += 30; reasons.push('merchant not whitelisted')
+  }
+  if (args.agentBio?.hijackSuspected) { risk += 40; reasons.push('behavioral drift detected') }
+  if (args.trustScore && args.trustScore.score < 300) { risk += 20; reasons.push('low trust score') }
+  if (args.trustScore && args.trustScore.disputes > 0) { risk += 15; reasons.push('prior disputes') }
+  const score = Math.min(100, risk)
+  const recommendation: 'approve' | 'review' | 'deny' =
+    score >= 70 ? 'deny' : score >= 40 ? 'review' : 'approve'
+  return { score, reasons, recommendation }
+}
+
+function seedRD(store: Store) {
+  const now = Date.now()
+  // seed trust scores for existing passports
+  for (const p of store.passports.values()) {
+    getOrInitTrustScore(store, p.agentId, p.id)
+  }
+  // seed marketplace
+  const templates: PolicyTemplate[] = [
+    { id: 'tpl-ecom',    name: 'E-Commerce Buyer Pack', vendor: 'AgentPass', category: 'commerce', priceUsd: 49,  installs: 1280, rating: 4.7, rules: [{ permission: 'purchase', maxAmount: 500, allowedMerchants: ['amazon.com','bestbuy.com'] }] },
+    { id: 'tpl-saas',    name: 'SaaS Refund Bot',       vendor: 'AgentPass', category: 'finance',  priceUsd: 79,  installs: 540,  rating: 4.5, rules: [{ permission: 'refund', maxAmount: 200 }] },
+    { id: 'tpl-travel',  name: 'Corporate Travel',      vendor: 'TravelCo',  category: 'travel',   priceUsd: 129, installs: 320,  rating: 4.8, rules: [{ permission: 'booking', maxAmount: 2500, allowedMerchants: ['expedia.com','united.com','marriott.com'] }] },
+    { id: 'tpl-fintech', name: 'Fintech Compliance',    vendor: 'AgentPass', category: 'finance',  priceUsd: 299, installs: 88,   rating: 4.9, rules: [{ permission: 'transfer', maxAmount: 10000 }] },
+  ]
+  for (const t of templates) store.templates.set(t.id, t)
+
+  // seed federated signals
+  store.fedSignals.push(
+    { id: 'fed-001', pattern: 'rapid_merchant_switching', prevalence: 0.04, contributors: 23, publishedAt: now - 86400000 * 2 },
+    { id: 'fed-002', pattern: 'midnight_high_value_burst', prevalence: 0.012, contributors: 41, publishedAt: now - 86400000 * 5 },
+    { id: 'fed-003', pattern: 'refund_then_purchase_loop', prevalence: 0.008, contributors: 12, publishedAt: now - 86400000 * 9 },
+  )
+
+  // seed bonds
+  store.bonds.set('pass-31bcf009', { passportId: 'pass-31bcf009', bondUsd: 500, slashed: 0, history: [{ ts: now - 86400000 * 7, delta: 500, reason: 'initial bond' }] })
+
+  // seed activity
+  store.activity.push(
+    { id: 'act-seed-1', passportId: 'pass-7af2ab1c', agentLabel: 'Drift Household Agent', type: 'action.approved', message: 'Purchase at whole-foods', amount: 47.23, merchant: 'whole-foods', decision: 'approved', ts: now - 3600000 },
+    { id: 'act-seed-2', passportId: 'pass-31bcf009', agentLabel: 'Halo Commerce Agent',    type: 'action.approved', message: 'Purchase at amazon-fresh', amount: 312.5, merchant: 'amazon-fresh', decision: 'approved', ts: now - 7200000 },
+  )
+
+  // seed merkle anchor
+  store.merkleAnchors.push({
+    id: 'anchor-001', rootHash: '0x' + 'a'.repeat(64),
+    receiptIds: ['rcpt-9114'], anchoredAt: now - 86400000,
+    txid: 'btc-tx-' + 'f'.repeat(40), chain: 'bitcoin',
+  })
 }
 
 export function getStore(): Store {
