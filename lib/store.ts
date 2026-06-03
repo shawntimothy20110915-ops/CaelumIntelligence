@@ -21,6 +21,7 @@ void HUMAN_REVIEW_MULTIPLIER // suppress lint
 
 interface Store {
   passports:      Map<string, AgentPassport>
+  apiKeys:        Map<string, string>           // apiKey → passportId
   proofs:         Map<string, DelegationProof>
   ledger:         LedgerEvent[]
   receipts:       Map<string, SignedReceipt>
@@ -226,11 +227,14 @@ function seedStore(store: Store) {
   const now = Date.now()
 
   const seedPassports: AgentPassport[] = [
-    { id: 'pass-7af2ab1c', agentId: 'drift-7af2', label: 'Drift Household Agent', publicKey: generatePublicKey(), mintedAt: now - 86400000 * 14, expiresAt: now + 86400000 * 351, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/drift-7af2', metadata: { owner: 'household' } },
-    { id: 'pass-31bcf009', agentId: 'halo-31bc',  label: 'Halo Commerce Agent',   publicKey: generatePublicKey(), mintedAt: now - 86400000 * 7,  expiresAt: now + 86400000 * 358, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/halo-31bc',  metadata: { owner: 'merchant'   } },
-    { id: 'pass-902e44d8', agentId: 'pilot-902e', label: 'Pilot Enterprise Agent', publicKey: generatePublicKey(), mintedAt: now - 86400000 * 3,  expiresAt: now + 86400000 * 362, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/pilot-902e', metadata: { owner: 'enterprise' } },
+    { id: 'pass-7af2ab1c', agentId: 'drift-7af2', label: 'Drift Household Agent', publicKey: generatePublicKey(), apiKey: 'ap_live_drift7af2household0000', mintedAt: now - 86400000 * 14, expiresAt: now + 86400000 * 351, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/drift-7af2', metadata: { owner: 'household' } },
+    { id: 'pass-31bcf009', agentId: 'halo-31bc',  label: 'Halo Commerce Agent',   publicKey: generatePublicKey(), apiKey: 'ap_live_halo31bccommerce0000', mintedAt: now - 86400000 * 7,  expiresAt: now + 86400000 * 358, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/halo-31bc',  metadata: { owner: 'merchant'   } },
+    { id: 'pass-902e44d8', agentId: 'pilot-902e', label: 'Pilot Enterprise Agent', publicKey: generatePublicKey(), apiKey: 'ap_live_pilot902eenterprise00', mintedAt: now - 86400000 * 3,  expiresAt: now + 86400000 * 362, status: 'active', killSwitchUrl: 'https://agentpass.io/revoke/pilot-902e', metadata: { owner: 'enterprise' } },
   ]
-  for (const p of seedPassports) store.passports.set(p.id, p)
+  for (const p of seedPassports) {
+    store.passports.set(p.id, p)
+    store.apiKeys.set(p.apiKey, p.id)
+  }
 
   store.billing.set('pass-7af2ab1c', { passportId: 'pass-7af2ab1c', plan: 'free',       credits: 50,  evalsUsed: 120,  proofCount: 1, spendUsd: 160.36,  budgetUsd: 500,  overageMode: 'hard', overageEvalsUsed: 0, overageCostUsd: 0, billingPeriodStart: now - 86400000 * 14, webhookUrl: null,                                    webhookAlertsSent: [], webhookEvalsCost: 0, orgId: null,       rateWindow: { count: 0, windowStart: now }, actionCosts: {} })
   store.billing.set('pass-31bcf009', { passportId: 'pass-31bcf009', plan: 'pro',        credits: 500, evalsUsed: 1240, proofCount: 1, spendUsd: 2062.50, budgetUsd: 5000, overageMode: 'soft', overageEvalsUsed: 0, overageCostUsd: 0, billingPeriodStart: now - 86400000 * 7,  webhookUrl: 'https://hooks.example.com/agentpass', webhookAlertsSent: [], webhookEvalsCost: 0, orgId: 'org-alpha', rateWindow: { count: 0, windowStart: now }, actionCosts: {} })
@@ -295,7 +299,7 @@ function seedStore(store: Store) {
 
 function initStore(): Store {
   const store: Store = {
-    passports: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
+    passports: new Map(), apiKeys: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
     approvalQueue: [], billing: new Map(), orgs: new Map(),
     promoCodes: new Map(), webhookEvents: [],
     seq: 0, startTime: Date.now(), baseEventCount: 847293, receiptCounter: 9115,
@@ -424,6 +428,12 @@ function seedRD(store: Store) {
     receiptIds: ['rcpt-9114'], anchoredAt: now - 86400000,
     txid: 'btc-tx-' + 'f'.repeat(40), chain: 'bitcoin',
   })
+}
+
+export function resolveApiKey(store: Store, apiKey: string): AgentPassport | null {
+  const passportId = store.apiKeys.get(apiKey)
+  if (!passportId) return null
+  return store.passports.get(passportId) ?? null
 }
 
 // ─── Wave-2 helpers ──────────────────────────────────────────────────────

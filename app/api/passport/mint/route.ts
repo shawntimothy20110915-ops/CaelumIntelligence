@@ -27,12 +27,14 @@ export async function POST(req: NextRequest) {
   const agentId = generateShortId(label.toLowerCase().slice(0, 4).replace(/[^a-z0-9]/g, 'x'))
   const id = generateShortId('pass')
 
+  const apiKey = 'ap_live_' + generateShortId('').replace('-', '') + generatePublicKey().slice(0, 16)
   const passport: AgentPassport = {
-    id, agentId, label, publicKey: generatePublicKey(),
+    id, agentId, label, publicKey: generatePublicKey(), apiKey,
     mintedAt: now, expiresAt: ttlDays ? now + ttlDays * 86400000 : null,
     status: 'active', killSwitchUrl: killSwitchUrl || null, metadata: metadata || {},
   }
   store.passports.set(id, passport)
+  store.apiKeys.set(apiKey, id)
 
   // Provision billing account
   const billing = getBilling(store, id)

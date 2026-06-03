@@ -3,6 +3,7 @@ export interface AgentPassport {
   agentId: string
   label: string
   publicKey: string
+  apiKey: string
   mintedAt: number
   expiresAt: number | null
   status: 'active' | 'revoked' | 'suspended'
