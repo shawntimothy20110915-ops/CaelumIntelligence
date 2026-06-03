@@ -21,6 +21,8 @@ export default function OnboardPage() {
   const [usecase, setUsecase] = useState<string | null>(null)
   const [budget, setBudget] = useState<number | null>(null)
   const [passportId, setPassportId] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [copied, setCopied] = useState(false)
   const [shake, setShake] = useState(false)
   const [error, setError] = useState('')
 
@@ -44,6 +46,7 @@ export default function OnboardPage() {
       const mint = await fetch('/api/passport/mint', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ label: name, ttlDays:30, budgetUsd: budget }) })
       const md = await mint.json()
       setPassportId(md.passport.id)
+      setApiKey(md.passport.apiKey)
       await fetch('/api/proof/delegate', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ passportId: md.passport.id, grantedTo: name, permissions:[usecase], ttlHours:24, maxAmount: budget }) })
       setStep(3)
     }
@@ -148,14 +151,41 @@ export default function OnboardPage() {
                 <motion.div
                   initial={{ rotate:-180 }} animate={{ rotate:0 }} transition={{ type:'spring', stiffness:100 }}
                   style={{ fontSize:120, color:c, filter:`drop-shadow(0 0 30px ${c})` }}>✦</motion.div>
+
+                <motion.div
+                  initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.4 }}
+                  style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, width:'100%', maxWidth:520, position:'relative', zIndex:1 }}>
+                  <div style={{ fontFamily: brand.font.mono, fontSize:11, color: brand.colors.gold, letterSpacing:2 }}>YOUR API KEY</div>
+                  <motion.div
+                    whileHover={{ scale:1.01 }}
+                    onClick={() => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                    style={{
+                      width:'100%', padding:'16px 20px', borderRadius: brand.radius.md, cursor:'pointer',
+                      background: `${brand.colors.gold}11`, border: `1px solid ${brand.colors.gold}66`,
+                      display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+                      boxShadow:`0 0 30px ${brand.colors.gold}22`,
+                    }}>
+                    <span style={{ fontFamily: brand.font.mono, fontSize:13, color: brand.colors.text, wordBreak:'break-all' }}>{apiKey}</span>
+                    <motion.span
+                      key={String(copied)}
+                      initial={{ scale:0.8, opacity:0 }} animate={{ scale:1, opacity:1 }}
+                      style={{ flexShrink:0, fontFamily: brand.font.mono, fontSize:12, color: copied ? brand.colors.success : brand.colors.gold }}>
+                      {copied ? '✓ copied' : '⧉'}
+                    </motion.span>
+                  </motion.div>
+                  <div style={{ fontFamily: brand.font.mono, fontSize:10, color: brand.colors.muted, letterSpacing:1 }}>
+                    shown once — copy now
+                  </div>
+                </motion.div>
+
                 <motion.a href={`/trust/${passportId.replace('pass-','')}`}
-                  initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.5 }}
+                  initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.7 }}
                   whileHover={{ scale:1.1 }}
                   style={{
                     padding:'16px 40px', borderRadius: brand.radius.pill,
                     background:`linear-gradient(135deg, ${c}, ${c}88)`,
                     color: brand.colors.text, textDecoration:'none', fontWeight:700, letterSpacing:2,
-                    boxShadow:`0 0 40px ${c}88`,
+                    boxShadow:`0 0 40px ${c}88`, position:'relative', zIndex:1,
                   }}>→</motion.a>
               </motion.div>
             )}
