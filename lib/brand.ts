@@ -31,5 +31,9 @@ export const nav = [
   { href: '/live',        label: 'Live',        icon: '◉' },
   { href: '/onboard',     label: 'Onboard',     icon: '✦' },
   { href: '/playground',  label: 'Playground',  icon: '◆' },
-  { href: '/marketplace', label: 'Marketplace', icon: '⬢' },
+  { href: '/marketplace', label: 'Market',      icon: '⬢' },
+  { href: '/leaderboard', label: 'Rank',        icon: '★' },
+  { href: '/graph',       label: 'Graph',       icon: '⬡' },
+  { href: '/report',      label: 'Report',      icon: '▦' },
+  { href: '/dispute',     label: 'Dispute',     icon: '⚑' },
 ] as const

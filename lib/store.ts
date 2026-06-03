@@ -6,6 +6,10 @@ import type {
   AgentBond, InsurancePolicy, PolicyTemplate, FederatedSignal,
   TrustDecayState, HoneypotHit, CollusionCluster, MerkleAnchor,
   ActivityEvent, VisualPolicy, OnboardingProgress, AnomalyAlert,
+  MeterUsage, InsuranceBid, EscrowPayment, SubscriptionTier, BadgeLicense, SlashingEvent,
+  AgentDna, PortableTrustVC, PreCrimeSignal, AttestationChain, CollusionEmbedding,
+  CreditReport, DisputeThread, LeaderboardEntry, TrustGraphNode, TrustGraphEdge,
+  SdkToken, OAuthClient, IntegrationConnector, QuotaDashboard,
 } from './types'
 import {
   PLAN_QUOTA, ACTION_CREDIT_COST, PROOF_TTL_CREDIT_COST,
@@ -52,6 +56,26 @@ interface Store {
   onboardings:        Map<string, OnboardingProgress>
   anomalies:          AnomalyAlert[]
   activity:           ActivityEvent[]
+  // Wave-2
+  meterUsage:         MeterUsage[]
+  insuranceBids:      Map<string, InsuranceBid>
+  escrows:            Map<string, EscrowPayment>
+  subscriptions:      Map<string, SubscriptionTier>
+  badgeLicenses:      Map<string, BadgeLicense>
+  slashingEvents:     SlashingEvent[]
+  agentDnas:          Map<string, AgentDna>
+  portableVcs:        Map<string, PortableTrustVC>
+  precrime:           Map<string, PreCrimeSignal>
+  attestationChains:  AttestationChain[]
+  collusionEmbeddings: CollusionEmbedding[]
+  creditReports:      Map<string, CreditReport>
+  disputeThreads:     Map<string, DisputeThread>
+  leaderboard:        LeaderboardEntry[]
+  trustGraph:         { nodes: TrustGraphNode[]; edges: TrustGraphEdge[] }
+  sdkTokens:          Map<string, SdkToken>
+  oauthClients:       Map<string, OAuthClient>
+  connectors:         Map<string, IntegrationConnector>
+  quotas:             Map<string, QuotaDashboard>
 }
 
 export interface ApprovalQueueItem {
@@ -283,6 +307,13 @@ function initStore(): Store {
     honeypotHits: [], collusionClusters: [], merkleAnchors: [],
     visualPolicies: new Map(), onboardings: new Map(), anomalies: [],
     activity: [],
+    meterUsage: [], insuranceBids: new Map(), escrows: new Map(),
+    subscriptions: new Map(), badgeLicenses: new Map(), slashingEvents: [],
+    agentDnas: new Map(), portableVcs: new Map(), precrime: new Map(),
+    attestationChains: [], collusionEmbeddings: [],
+    creditReports: new Map(), disputeThreads: new Map(), leaderboard: [],
+    trustGraph: { nodes: [], edges: [] },
+    sdkTokens: new Map(), oauthClients: new Map(), connectors: new Map(), quotas: new Map(),
   }
   seedStore(store)
   seedRD(store)
@@ -393,6 +424,71 @@ function seedRD(store: Store) {
     receiptIds: ['rcpt-9114'], anchoredAt: now - 86400000,
     txid: 'btc-tx-' + 'f'.repeat(40), chain: 'bitcoin',
   })
+}
+
+// ─── Wave-2 helpers ──────────────────────────────────────────────────────
+
+export function recordMeter(store: Store, orgId: string, passportId: string, metricType: MeterUsage['metricType'], count = 1) {
+  const RATES: Record<string, number> = { 'trust-lookup': 0.001, 'zk-proof': 0.005, 'tee-eval': 0.004, 'bio-sample': 0.002 }
+  store.meterUsage.push({ orgId, passportId, metricType, count, totalCostUsd: count * (RATES[metricType] ?? 0.001), billedAt: Date.now() })
+}
+
+export function buildLeaderboard(store: Store): LeaderboardEntry[] {
+  const entries: LeaderboardEntry[] = []
+  store.trustScores.forEach((ts) => {
+    const p = [...store.passports.values()].find(p => p.agentId === ts.agentId)
+    entries.push({ rank: 0, agentId: ts.agentId, passportLabel: p?.label ?? ts.agentId, score: ts.score, approvals: ts.approvals, badges: ts.badges })
+  })
+  entries.sort((a, b) => b.score - a.score)
+  entries.forEach((e, i) => { e.rank = i + 1 })
+  store.leaderboard = entries.slice(0, 50)
+  return store.leaderboard
+}
+
+export function buildTrustGraph(store: Store) {
+  const nodes: TrustGraphNode[] = []
+  const edges: TrustGraphEdge[] = []
+  store.passports.forEach(p => nodes.push({ id: p.agentId, type: 'agent', label: p.label, trustScore: store.trustScores.get(p.agentId)?.score }))
+  store.orgs.forEach(o => nodes.push({ id: o.id, type: 'org', label: o.name }))
+  store.proofs.forEach(pr => edges.push({ source: pr.passportId, target: pr.grantedTo, weight: 1, type: 'delegated' }))
+  store.a2aPayments.forEach(pay => edges.push({ source: pay.fromPassport, target: pay.toPassport, weight: pay.amountUsd, type: 'paid' }))
+  store.trustGraph = { nodes, edges }
+  return store.trustGraph
+}
+
+export function fingerprintAgent(store: Store, agentId: string, modelId: string, systemPromptHash: string): AgentDna {
+  const fingerprint = computeHmac(agentId + modelId + systemPromptHash).slice(0, 32)
+  const dna: AgentDna = { agentId, modelId, systemPromptHash, fingerprint, createdAt: Date.now() }
+  store.agentDnas.set(agentId, dna)
+  return dna
+}
+
+export function predictPreCrime(store: Store, agentId: string): PreCrimeSignal {
+  const bio = store.agentBios.get(agentId)
+  const ts = store.trustScores.get(agentId)
+  const recent = store.activity.filter(a => a.passportId).slice(0, 10).map(a => a.type)
+  const denialRatio = ts ? ts.denials / Math.max(ts.approvals + ts.denials, 1) : 0
+  const predictedRisk = Math.min(100, Math.round(denialRatio * 80 + (bio ? 0 : 20)))
+  const sig: PreCrimeSignal = {
+    agentId, actionSequence: recent, predictedRisk, confidence: bio ? 0.85 : 0.4,
+    recommendation: predictedRisk > 70 ? 'block' : predictedRisk > 40 ? 'review' : 'allow',
+    generatedAt: Date.now(),
+  }
+  store.precrime.set(agentId, sig)
+  return sig
+}
+
+export function generateCreditReport(store: Store, agentId: string): CreditReport {
+  const ts = store.trustScores.get(agentId) ?? { score: 0, approvals: 0, denials: 0, disputes: 0, badges: [] }
+  const acts = store.activity.filter(a => a.decision === 'approved' && a.merchant)
+  const merchantCounts: Record<string, number> = {}
+  acts.forEach(a => { if (a.merchant) merchantCounts[a.merchant] = (merchantCounts[a.merchant] ?? 0) + 1 })
+  const topMerchants = Object.entries(merchantCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0])
+  const now = Date.now()
+  const history = [0, 7, 14, 30].map(daysAgo => ({ date: new Date(now - daysAgo * 86400000).toISOString().slice(0, 10), score: Math.max(0, ts.score - daysAgo * 2) }))
+  const report: CreditReport = { agentId, score: ts.score, scoreHistory: history, badges: ts.badges, approvals: ts.approvals, denials: ts.denials, disputes: ts.disputes, topMerchants, generatedAt: now }
+  store.creditReports.set(agentId, report)
+  return report
 }
 
 export function getStore(): Store {

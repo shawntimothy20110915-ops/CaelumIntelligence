@@ -371,7 +371,7 @@ export default function Home() {
               Explore Live
             </span>
             <div style={{ fontFamily: "'Instrument Serif', serif", fontStyle:'italic', fontSize: 38, color:'rgba(244,236,221,0.94)', marginTop: 10 }}>
-              Six surfaces. One trust layer.
+              Ten surfaces. One trust layer.
             </div>
           </motion.div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
@@ -382,6 +382,10 @@ export default function Home() {
               { href:'/marketplace',         label:'Marketplace',  icon:'⬢', sub:'Install policy packs', c:'rgba(212,163,90,0.6)' },
               { href:'/trust/drift-7af2',    label:'Trust Profile',icon:'★', sub:'Live reputation',      c:'rgba(59,130,246,0.6)' },
               { href:'/verify/rcpt-9114',    label:'Verify',       icon:'✓', sub:'Receipt authenticity', c:'rgba(236,72,153,0.6)' },
+              { href:'/leaderboard',         label:'Leaderboard',  icon:'★', sub:'Top-ranked agents',    c:'rgba(212,163,90,0.6)' },
+              { href:'/graph',               label:'Trust Graph',  icon:'⬡', sub:'Force-graph explorer',  c:'rgba(99,102,241,0.6)' },
+              { href:'/report',              label:'Credit Report',icon:'▦', sub:'Full trust history',    c:'rgba(59,130,246,0.6)' },
+              { href:'/dispute',             label:'Dispute',      icon:'⚑', sub:'Contest a denial',      c:'rgba(239,68,68,0.6)' },
             ].map((t, i) => (
               <motion.a key={t.href} href={t.href}
                 initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}

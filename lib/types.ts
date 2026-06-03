@@ -437,6 +437,191 @@ export interface AnomalyAlert {
   acknowledged: boolean
 }
 
+// ── Wave-2 types ───────────────────────────────────────────────────────────
+
+export interface MeterUsage {
+  orgId: string
+  passportId: string
+  metricType: 'trust-lookup' | 'zk-proof' | 'tee-eval' | 'bio-sample'
+  count: number
+  totalCostUsd: number
+  billedAt: number
+}
+
+export interface InsuranceBid {
+  id: string
+  providerId: string
+  passportId: string
+  actionType: string
+  premiumBps: number   // basis points of action amount
+  maxCoverageUsd: number
+  expiresAt: number
+  acceptedAt?: number
+}
+
+export interface EscrowPayment {
+  id: string
+  dagId: string
+  amount: number
+  currency: string
+  takeBps: number
+  status: 'held' | 'released' | 'clawed-back'
+  createdAt: number
+  settledAt?: number
+}
+
+export interface SubscriptionTier {
+  orgId: string
+  tier: 'starter' | 'verified' | 'enterprise'
+  priceUsdPerMonth: number
+  features: string[]
+  startedAt: number
+  renewsAt: number
+}
+
+export interface BadgeLicense {
+  id: string
+  orgId: string
+  domain: string
+  logoUrl?: string
+  issuedAt: number
+  expiresAt: number
+  callCount: number
+}
+
+export interface SlashingEvent {
+  id: string
+  bondId: string
+  reason: string
+  slashedUsd: number
+  yieldEarnedUsd: number
+  ts: number
+}
+
+export interface AgentDna {
+  agentId: string
+  modelId: string
+  systemPromptHash: string
+  weightsHash?: string
+  fingerprint: string   // sha256 of above fields
+  createdAt: number
+}
+
+export interface PortableTrustVC {
+  vcId: string
+  agentId: string
+  scoreAbove: number
+  proof: string        // ZK-style commitment
+  issuedAt: number
+  expiresAt: number
+}
+
+export interface PreCrimeSignal {
+  agentId: string
+  actionSequence: string[]
+  predictedRisk: number   // 0-100
+  confidence: number
+  recommendation: 'allow' | 'review' | 'block'
+  generatedAt: number
+}
+
+export interface AttestationChain {
+  actionId: string
+  agentId: string
+  hardwareBindingId: string
+  signature: string
+  tpmAttestation: string
+  ts: number
+}
+
+export interface CollusionEmbedding {
+  clusterId: string
+  agentIds: string[]
+  edgeWeights: number[][]
+  riskScore: number
+  detectedAt: number
+}
+
+export interface CreditReport {
+  agentId: string
+  score: number
+  scoreHistory: { date: string; score: number }[]
+  badges: string[]
+  approvals: number
+  denials: number
+  disputes: number
+  topMerchants: string[]
+  generatedAt: number
+}
+
+export interface DisputeThread {
+  id: string
+  receiptId: string
+  passportId: string
+  messages: { role: 'user' | 'system'; text: string; ts: number }[]
+  status: 'open' | 'resolved' | 'escalated'
+  createdAt: number
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  agentId: string
+  passportLabel: string
+  score: number
+  approvals: number
+  badges: string[]
+}
+
+export interface TrustGraphNode {
+  id: string
+  type: 'agent' | 'org' | 'action'
+  label: string
+  trustScore?: number
+}
+
+export interface TrustGraphEdge {
+  source: string
+  target: string
+  weight: number
+  type: 'delegated' | 'evaluated' | 'paid'
+}
+
+export interface SdkToken {
+  tokenId: string
+  orgId: string
+  scopes: string[]
+  issuedAt: number
+  expiresAt: number
+  secret: string
+}
+
+export interface OAuthClient {
+  clientId: string
+  orgId: string
+  redirectUris: string[]
+  scopes: string[]
+  createdAt: number
+}
+
+export interface IntegrationConnector {
+  id: string
+  type: 'zapier' | 'mcp' | 'webhook'
+  orgId: string
+  config: Record<string, string>
+  createdAt: number
+}
+
+export interface QuotaDashboard {
+  orgId: string
+  evalLimit: number
+  evalUsed: number
+  proofLimit: number
+  proofUsed: number
+  apiCallsLimit: number
+  apiCallsUsed: number
+  resetAt: number
+}
+
 export interface SystemStatus {
   healthy: boolean
   uptime: number
