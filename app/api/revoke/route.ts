@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStore, appendLedgerEvent } from '@/lib/store'
+import { getSession } from '@/lib/session'
+
+/** Owned passports may only be mutated by their owner; un-owned demo passports are open. */
+function ownershipError(ownerUserId: string | undefined, req: NextRequest) {
+  if (!ownerUserId) return null
+  const session = getSession(req)
+  if (!session) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
+  if (session.uid !== ownerUserId) return NextResponse.json({ error: 'Forbidden.' }, { status: 403 })
+  return null
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -15,6 +25,9 @@ export async function POST(req: NextRequest) {
   if (type === 'passport') {
     const passport = store.passports.get(id)
     if (!passport) return NextResponse.json({ error: 'passport not found' }, { status: 404 })
+
+    const denied = ownershipError(passport.ownerUserId, req)
+    if (denied) return denied
 
     passport.status = 'revoked'
 
@@ -56,6 +69,10 @@ export async function POST(req: NextRequest) {
     if (!proof) return NextResponse.json({ error: 'proof not found' }, { status: 404 })
 
     const passport = store.passports.get(proof.passportId)
+
+    const denied = ownershipError(passport?.ownerUserId, req)
+    if (denied) return denied
+
     proof.status = 'revoked'
 
     appendLedgerEvent(store, {

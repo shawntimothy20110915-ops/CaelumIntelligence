@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStore, appendLedgerEvent, getBilling } from '@/lib/store'
+import { getSession } from '@/lib/session'
 import { generateShortId, generatePublicKey } from '@/lib/crypto'
 import { PLAN_QUOTA, PLAN_MAX_PROOFS, PLAN_PRICE_USD } from '@/lib/types'
 import type { AgentPassport, PlanTier } from '@/lib/types'
@@ -28,10 +29,12 @@ export async function POST(req: NextRequest) {
   const id = generateShortId('pass')
 
   const apiKey = 'ap_live_' + generateShortId('').replace('-', '') + generatePublicKey().slice(0, 16)
+  const session = getSession(req)
   const passport: AgentPassport = {
     id, agentId, label, publicKey: generatePublicKey(), apiKey,
     mintedAt: now, expiresAt: ttlDays ? now + ttlDays * 86400000 : null,
     status: 'active', killSwitchUrl: killSwitchUrl || null, metadata: metadata || {},
+    ...(session ? { ownerUserId: session.uid } : {}),
   }
   store.passports.set(id, passport)
   store.apiKeys.set(apiKey, id)
@@ -66,8 +69,10 @@ export async function POST(req: NextRequest) {
   }, { status: 201 })
 }
 
+// Public demo listing: only un-owned showcase passports. A user's own passports are
+// private and served by GET /api/account/passports (session-scoped).
 export async function GET() {
   const store = getStore()
-  const passports = Array.from(store.passports.values())
+  const passports = Array.from(store.passports.values()).filter(p => !p.ownerUserId)
   return NextResponse.json({ passports })
 }

@@ -1,6 +1,26 @@
-import { createHmac, createHash, randomBytes } from 'crypto'
+import { createHmac, createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 
 const HMAC_SECRET = process.env.HMAC_SECRET || 'agentpass-dev-secret-do-not-use-in-production'
+
+/** Full-length, URL-safe HMAC for session tokens (verified statelessly in proxy.ts). */
+export function hmacSign(data: string): string {
+  return createHmac('sha256', HMAC_SECRET).update(data).digest('base64url')
+}
+
+/** scrypt password hash, stored as `salt:hash`. */
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':')
+  if (!salt || !hash) return false
+  const candidate = scryptSync(password, salt, 64)
+  const expected = Buffer.from(hash, 'hex')
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected)
+}
 
 export function generateShortId(prefix: string): string {
   return `${prefix}-${randomBytes(4).toString('hex')}`

@@ -28,6 +28,7 @@ export const brand = {
 
 export const nav = [
   { href: '/',            label: 'Home',        icon: '⌂' },
+  { href: '/pricing',     label: 'Pricing',     icon: '◇' },
   { href: '/live',        label: 'Live',        icon: '◉' },
   { href: '/onboard',     label: 'Onboard',     icon: '✦' },
   { href: '/playground',  label: 'Playground',  icon: '◆' },

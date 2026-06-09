@@ -11,7 +11,7 @@ interface Agent { id: string; name: string; description: string; model: string; 
 interface Toast { id: string; type: 'success' | 'error' | 'info'; message: string }
 interface ActivityEntry { id: string; action: string; detail: string; ts: string }
 
-const API = 'https://agentpassv22.vercel.app/api'
+const API = '/api'
 const ALL_PERMISSIONS = ['purchase', 'search', 'refund', 'booking', 'transfer']
 const ALL_MODELS = ['claude-opus-4-7', 'claude-sonnet-4-6', 'gpt-4o', 'gpt-4o-mini', 'gemini-2.0-flash']
 const TTL_OPTIONS = [

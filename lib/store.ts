@@ -10,12 +10,14 @@ import type {
   AgentDna, PortableTrustVC, PreCrimeSignal, AttestationChain, CollusionEmbedding,
   CreditReport, DisputeThread, LeaderboardEntry, TrustGraphNode, TrustGraphEdge,
   SdkToken, OAuthClient, IntegrationConnector, QuotaDashboard,
+  User, PlanTier,
 } from './types'
 import {
   PLAN_QUOTA, ACTION_CREDIT_COST, PROOF_TTL_CREDIT_COST,
   HUMAN_REVIEW_MULTIPLIER, WEBHOOK_CREDIT_COST, OVERAGE_COST_PER_EVAL,
 } from './types'
 import { generateShortId, generatePublicKey, computeHmac, hashLedgerEntry, generateSignature } from './crypto'
+import { hydrateStore, startPersistence, persistNow } from './persistence'
 
 void HUMAN_REVIEW_MULTIPLIER // suppress lint
 
@@ -77,6 +79,7 @@ interface Store {
   oauthClients:       Map<string, OAuthClient>
   connectors:         Map<string, IntegrationConnector>
   quotas:             Map<string, QuotaDashboard>
+  users:              Map<string, User>   // keyed by user id
 }
 
 export interface ApprovalQueueItem {
@@ -318,6 +321,7 @@ function initStore(): Store {
     creditReports: new Map(), disputeThreads: new Map(), leaderboard: [],
     trustGraph: { nodes: [], edges: [] },
     sdkTokens: new Map(), oauthClients: new Map(), connectors: new Map(), quotas: new Map(),
+    users: new Map(),
   }
   seedStore(store)
   seedRD(store)
@@ -504,6 +508,45 @@ export function generateCreditReport(store: Store, agentId: string): CreditRepor
 export function getStore(): Store {
   if (!global.__agentpassStore) global.__agentpassStore = initStore()
   return global.__agentpassStore
+}
+
+// ─── Durable persistence bootstrap (opt-in via DATABASE_URL) ──────────────
+// Runs once per process at module load. Top-level await guarantees the store is
+// hydrated from Postgres before any route handler (which imports this module) runs.
+declare global { var __agentpassHydrated: boolean | undefined }
+if (process.env.DATABASE_URL && !global.__agentpassHydrated) {
+  global.__agentpassHydrated = true
+  const store = getStore()
+  await hydrateStore(store as unknown as Record<string, unknown>)
+  startPersistence(getStore as unknown as () => Record<string, unknown>)
+}
+
+// ─── Users / accounts ─────────────────────────────────────────────────────
+export function findUserByEmail(store: Store, email: string): User | null {
+  const e = email.trim().toLowerCase()
+  for (const u of store.users.values()) if (u.email === e) return u
+  return null
+}
+export function getUserById(store: Store, id: string): User | null {
+  return store.users.get(id) ?? null
+}
+export function createUser(store: Store, email: string, passwordHash: string, plan: PlanTier = 'free'): User {
+  const user: User = {
+    id: generateShortId('usr'),
+    email: email.trim().toLowerCase(),
+    passwordHash, plan, orgId: null, createdAt: Date.now(),
+  }
+  store.users.set(user.id, user)
+  return user
+}
+/** Force a snapshot to Postgres now (used for must-survive writes like signup/payment). */
+export async function flushStore(): Promise<void> {
+  await persistNow(getStore() as unknown as Record<string, unknown>)
+}
+
+/** Passports owned by a specific user (per-tenant isolation for the core object). */
+export function getPassportsByOwner(store: Store, userId: string): AgentPassport[] {
+  return Array.from(store.passports.values()).filter(p => p.ownerUserId === userId)
 }
 
 export function appendLedgerEvent(

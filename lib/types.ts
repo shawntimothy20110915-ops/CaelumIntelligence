@@ -9,6 +9,7 @@ export interface AgentPassport {
   status: 'active' | 'revoked' | 'suspended'
   killSwitchUrl: string | null
   metadata: Record<string, string>
+  ownerUserId?: string   // set when minted by an authenticated user; absent = public demo
 }
 
 export interface DelegationProof {
@@ -167,6 +168,16 @@ export interface Organization {
   maxSeats: number
   agentIds: string[]
   plan: 'team' | 'enterprise'
+  createdAt: number
+}
+
+export interface User {
+  id: string
+  email: string
+  passwordHash: string
+  plan: PlanTier
+  orgId: string | null
+  stripeCustomerId?: string
   createdAt: number
 }
 

@@ -14,16 +14,18 @@ const ShaderAnimation = dynamic(
   { ssr: false }
 )
 
+// Illustrative capability statements — what AgentPass is built to deliver.
+// These are product claims, NOT customer endorsements.
 const TESTIMONIALS = [
-  { text: "AgentPass eliminated our entire audit backlog. Every AI decision is cryptographically provable in seconds.", image: "https://i.pravatar.cc/150?img=1", name: "Aria Chen", role: "CTO, Nexus Systems" },
-  { text: "We went from 6-hour approval queues to real-time. The trust chain is elegant engineering.", image: "https://i.pravatar.cc/150?img=2", name: "Marcus Webb", role: "VP Engineering, Orbital" },
-  { text: "SOC 2 with AI agents used to be a nightmare. AgentPass made it straightforward.", image: "https://i.pravatar.cc/150?img=3", name: "Priya Nair", role: "Security Lead, Lumen AI" },
-  { text: "The passport system is exactly what enterprise AI orchestration was missing.", image: "https://i.pravatar.cc/150?img=4", name: "James Okafor", role: "Head of AI, Stratos" },
-  { text: "Kill switch on every agent. My compliance team finally stopped worrying.", image: "https://i.pravatar.cc/150?img=5", name: "Sofia Reyes", role: "CISO, Vanta Labs" },
-  { text: "Sub-80ms trust verification. We don't even notice the overhead anymore.", image: "https://i.pravatar.cc/150?img=6", name: "Kenji Tanaka", role: "Platform Arch, Helix" },
-  { text: "Immutable ledger means every stakeholder can audit without bothering engineering.", image: "https://i.pravatar.cc/150?img=7", name: "Layla Hassan", role: "COO, Quorum AI" },
-  { text: "AgentPass is the trust layer we didn't know we needed until we needed it.", image: "https://i.pravatar.cc/150?img=8", name: "Finn Larsen", role: "Product, Cipher Works" },
-  { text: "Our enterprise clients require explainability. AgentPass delivers it out of the box.", image: "https://i.pravatar.cc/150?img=9", name: "Mei Zhang", role: "Solutions Eng, Relay" },
+  { text: "Make every AI decision cryptographically provable in seconds — and clear your audit backlog.", name: "Provable audit trail", role: "Compliance" },
+  { text: "Turn multi-hour approval queues into real-time, human-in-the-loop checks.", name: "Real-time approvals", role: "Operations" },
+  { text: "Built to make SOC 2 with autonomous agents straightforward instead of a nightmare.", name: "SOC 2 ready", role: "Security" },
+  { text: "Give every agent a cryptographic passport bound to exactly what it’s allowed to do.", name: "Agent passports", role: "Identity" },
+  { text: "A kill switch on every agent, so your compliance team can finally relax.", name: "Instant kill switch", role: "Safety" },
+  { text: "Sub-100ms trust verification designed to disappear into your request path.", name: "Low-latency checks", role: "Performance" },
+  { text: "An immutable ledger any stakeholder can audit without bothering engineering.", name: "Immutable ledger", role: "Governance" },
+  { text: "The trust layer enterprise AI orchestration was missing.", name: "Enterprise trust layer", role: "Platform" },
+  { text: "Explainability your enterprise clients require — out of the box.", name: "Explainable by default", role: "Transparency" },
 ]
 
 const FEATURES = [
@@ -317,9 +319,9 @@ export default function Home() {
                 Start building
               </span>
             </MetalButton>
-            <LiquidButton size="lg">
+            <LiquidButton size="lg" onClick={() => { window.location.href = '/pricing' }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: '0.08em', color: 'rgba(244,236,221,0.65)', fontWeight: 400 }}>
-                View demo
+                See pricing
               </span>
             </LiquidButton>
           </motion.div>
@@ -462,8 +464,11 @@ export default function Home() {
             className="text-center mb-14"
           >
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgba(212,163,90,0.45)', letterSpacing: '0.22em', textTransform: 'uppercase' }}>
-              Trusted by teams shipping AI
+              Built for teams shipping AI agents
             </span>
+            <p style={{ fontSize: 11, color: 'rgba(244,236,221,0.3)', marginTop: 8 }}>
+              Illustrative capabilities — not customer endorsements.
+            </p>
           </motion.div>
           <div className="flex gap-5 justify-center px-6 max-h-[600px] overflow-hidden">
             <TestimonialsColumn testimonials={t1} duration={24} />
@@ -552,9 +557,9 @@ export default function Home() {
                 Get your passport
               </span>
             </MetalButton>
-            <LiquidButton size="lg">
+            <LiquidButton size="lg" onClick={() => { window.location.href = '/pricing' }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: '0.09em', color: 'rgba(244,236,221,0.55)', fontWeight: 400 }}>
-                Read the docs
+                See pricing
               </span>
             </LiquidButton>
           </div>
