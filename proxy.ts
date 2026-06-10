@@ -18,11 +18,21 @@ import type { NextRequest } from 'next/server'
  * must also be scoped to the session — tracked as a follow-up.
  */
 
-const HMAC_SECRET = process.env.HMAC_SECRET || 'agentpass-dev-secret-do-not-use-in-production'
+const HMAC_SECRET = process.env.HMAC_SECRET
+  || (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build'
+    ? (() => { throw new Error('HMAC_SECRET is required in production.') })()
+    : 'agentpass-dev-secret-do-not-use-in-production')
 const SESSION_COOKIE = 'ap_session'
 
-// Always public (any method)
-const PUBLIC_PREFIXES = ['/api/auth/', '/api/checkout', '/api/stripe-webhook', '/api/status']
+// Always public at the proxy. `/api/eval` is the API-key enforcement endpoint —
+// it authenticates the caller in-route via resolveApiKey, not via a session cookie.
+const PUBLIC_PREFIXES = ['/api/auth/', '/api/checkout', '/api/stripe-webhook', '/api/status', '/api/eval', '/api/approval/resolve', '/api/issuing/']
+// Sensitive reads: tenant-scoped data that must NEVER be world-readable. These
+// require a valid session even for GET (the route then scopes to the caller).
+const SENSITIVE_READ = [
+  '/api/ledger/events', '/api/usage', '/api/billing', '/api/org', '/api/org-view',
+  '/api/subscription', '/api/meter', '/api/quota', '/api/credit-report', '/api/audit-pack',
+]
 // Public interactive-demo writes (used by logged-out showcase pages)
 const DEMO_WRITE = new Set([
   '/api/passport/mint',
@@ -78,6 +88,13 @@ export async function proxy(req: NextRequest) {
   }
 
   if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next()
+
+  // Tenant-scoped data requires a session regardless of method (closes GET IDOR).
+  if (SENSITIVE_READ.some(p => pathname.startsWith(p))) {
+    if (await hasValidSession(req)) return NextResponse.next()
+    return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
+  }
+
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return NextResponse.next()
   if (DEMO_WRITE.has(pathname)) return NextResponse.next()
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStore, getBilling, evalsRemainingInPlan } from '@/lib/store'
+import { getSession } from '@/lib/session'
 import { PLAN_QUOTA, PLAN_PRICE_USD, ACTION_CREDIT_COST } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -9,6 +10,13 @@ export async function GET(req: NextRequest) {
   const store = getStore()
   const passport = store.passports.get(passportId)
   if (!passport) return NextResponse.json({ error: 'passport not found' }, { status: 404 })
+
+  // Owned billing data is readable only by its owner (ownerless demo passports are open).
+  if (passport.ownerUserId) {
+    const session = getSession(req)
+    if (!session) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
+    if (session.uid !== passport.ownerUserId) return NextResponse.json({ error: 'Forbidden.' }, { status: 403 })
+  }
 
   const billing = getBilling(store, passportId)
   const quota = PLAN_QUOTA[billing.plan]

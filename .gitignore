@@ -37,6 +37,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local agent + generated artifacts
+.claude/
+graphify-out/
+*.bak
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

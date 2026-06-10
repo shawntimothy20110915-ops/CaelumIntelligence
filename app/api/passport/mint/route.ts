@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStore, appendLedgerEvent, getBilling } from '@/lib/store'
 import { getSession } from '@/lib/session'
 import { generateShortId, generatePublicKey } from '@/lib/crypto'
+import { rateLimit, clientIp } from '@/lib/ratelimit'
 import { PLAN_QUOTA, PLAN_MAX_PROOFS, PLAN_PRICE_USD } from '@/lib/types'
 import type { AgentPassport, PlanTier } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(`mint:${clientIp(req)}`, 30, 60_000)) {
+    return NextResponse.json({ error: 'Too many mint requests. Try again shortly.' }, { status: 429 })
+  }
+
   const body = await req.json()
   const { label, killSwitchUrl, metadata, ttlDays, plan, budgetUsd, orgId, webhookUrl, actionCosts } = body
 

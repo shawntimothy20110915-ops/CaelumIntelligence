@@ -92,8 +92,26 @@ export interface SignedReceipt {
     approvalHmac: string
   }
   hmac: string
+  /** Ed25519 signature over canonicalReceipt() — verifiable with the public key. */
+  signature?: string
   issuedAt: number
   retainUntil: number
+}
+
+/** Single source of truth for what a receipt signature covers (no construct/verify drift). */
+export function canonicalReceipt(r: Pick<SignedReceipt,
+  'id' | 'passportId' | 'agentId' | 'action' | 'decision' | 'issuedAt'> & { merchant?: string; amount?: number }): string {
+  return [r.id, r.passportId, r.agentId, r.action, r.merchant ?? '', r.amount ?? '', r.decision, r.issuedAt].join('|')
+}
+
+/** Single source of truth for what a delegation-proof signature covers. */
+export function canonicalProof(p: Pick<DelegationProof, 'id' | 'passportId' | 'grantedTo' | 'permissions' | 'issuedAt'>
+  & { constraints: { maxAmount?: number; allowedMerchants?: string[]; expiresAt: number } }): string {
+  return [
+    p.id, p.passportId, p.grantedTo, [...p.permissions].sort().join(','),
+    p.constraints.maxAmount ?? '', (p.constraints.allowedMerchants ?? []).slice().sort().join(','),
+    p.constraints.expiresAt, p.issuedAt,
+  ].join('|')
 }
 
 export type PlanTier = 'free' | 'pro' | 'enterprise'
@@ -178,6 +196,7 @@ export interface User {
   plan: PlanTier
   orgId: string | null
   stripeCustomerId?: string
+  tokenVersion?: number // bump to invalidate all of this user's sessions
   createdAt: number
 }
 

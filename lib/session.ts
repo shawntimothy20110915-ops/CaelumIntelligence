@@ -1,4 +1,5 @@
 import { hmacSign } from './crypto'
+import { getStore, getUserById } from './store'
 import type { PlanTier } from './types'
 
 export const SESSION_COOKIE = 'ap_session'
@@ -8,6 +9,7 @@ export interface SessionPayload {
   uid: string
   email: string
   plan: PlanTier
+  ver: number // token version — bumped to revoke all of a user's sessions
   iat: number
   exp: number
 }
@@ -16,9 +18,12 @@ const enc = (s: string) => Buffer.from(s).toString('base64url')
 const dec = (s: string) => Buffer.from(s, 'base64url').toString()
 
 /** token = base64url(payload).base64url(hmac) — verifiable without a DB lookup. */
-export function createSessionToken(user: { id: string; email: string; plan: PlanTier }): string {
+export function createSessionToken(user: { id: string; email: string; plan: PlanTier; tokenVersion?: number }): string {
   const now = Math.floor(Date.now() / 1000)
-  const payload: SessionPayload = { uid: user.id, email: user.email, plan: user.plan, iat: now, exp: now + MAX_AGE }
+  const payload: SessionPayload = {
+    uid: user.id, email: user.email, plan: user.plan, ver: user.tokenVersion ?? 0,
+    iat: now, exp: now + MAX_AGE,
+  }
   const body = enc(JSON.stringify(payload))
   return `${body}.${hmacSign(body)}`
 }
@@ -30,6 +35,10 @@ export function verifySessionToken(token: string | undefined | null): SessionPay
   try {
     const payload = JSON.parse(dec(body)) as SessionPayload
     if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null
+    // Authoritative revocation: a session is dead if the user's tokenVersion moved
+    // past the one embedded in the token (logout-all, password change, plan change).
+    const user = getUserById(getStore(), payload.uid)
+    if (user && (user.tokenVersion ?? 0) !== payload.ver) return null
     return payload
   } catch {
     return null

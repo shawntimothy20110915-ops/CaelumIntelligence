@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStore, resolveApiKey, appendLedgerEvent, getBilling, actionCreditCost, chargeCredits, checkRateLimit, updateTrustScore, recordActivity, detectInjection, computeRiskScore } from '@/lib/store'
 import { generateShortId, computeHmac } from '@/lib/crypto'
+import { evaluatePolicy } from '@/lib/policy'
+import { signApprovalToken } from '@/lib/approval-token'
+import { notifyApproval } from '@/lib/notify'
 import { PLAN_RATE_LIMIT } from '@/lib/types'
 
 // Simple API-key-driven eval — no passportId or proofId needed.
@@ -36,25 +39,17 @@ export async function POST(req: NextRequest) {
     p.permissions.includes(action)
   )
 
-  let decision: 'approved' | 'denied' | 'human_review' = 'approved'
-  let reason = 'policy satisfied'
-
-  if (!proof) {
-    decision = 'denied'
-    reason = `no active proof grants '${action}'`
-  } else if (amount !== undefined && proof.constraints.maxAmount !== undefined && amount > proof.constraints.maxAmount) {
-    decision = 'human_review'
-    reason = `amount $${amount} exceeds proof limit $${proof.constraints.maxAmount}`
-  } else if (amount !== undefined && amount > 1000) {
-    decision = 'human_review'
-    reason = 'high-value transaction requires human approval'
-  } else if (amount !== undefined && billing.budgetUsd !== null) {
-    const spent = billing.spendUsd ?? 0
-    if (spent + amount > billing.budgetUsd) {
-      decision = 'denied'
-      reason = `budget exhausted ($${spent.toFixed(2)} of $${billing.budgetUsd})`
-    }
-  }
+  // Same shared decision as /api/approval/evaluate — including the merchant
+  // allowlist, which this endpoint previously skipped.
+  const policy = evaluatePolicy({
+    passportStatus: passport.status,
+    proof: proof ? { status: proof.status, permissions: proof.permissions, constraints: proof.constraints } : null,
+    action, amount, merchant, now,
+    budgetUsd: billing.budgetUsd, spendUsd: billing.spendUsd ?? 0,
+  })
+  const decision = policy.decision
+  const reason = policy.reason
+  if (policy.expireProof && proof) proof.status = 'expired'
 
   // Injection scan
   const injCheck = detectInjection(metadata?.userInput ?? '')
@@ -78,6 +73,15 @@ export async function POST(req: NextRequest) {
   recordActivity(store, { passportId, agentLabel: passport.label, type: `action.${decision}`, message: `${action}${merchant ? ` at ${merchant}` : ''}`, amount, merchant, decision })
   const riskScore = computeRiskScore({ amount, merchant, trustScore: store.trustScores.get(passport.agentId) })
 
+  // Human review → a real, resolvable approval link (out-of-band, signed, expiring).
+  let approvalLink: string | undefined
+  if (decision === 'human_review' && proof) {
+    const queueId = generateShortId('queue')
+    store.approvalQueue.push({ id: queueId, passportId, proofId: proof.id, agentLabel: passport.label, action, merchant, amount, queuedAt: now, status: 'pending' })
+    approvalLink = `${new URL(req.url).origin}/api/approval/resolve?token=${signApprovalToken(queueId)}`
+    void notifyApproval({ link: approvalLink, agentLabel: passport.label, action, merchant, amount, reason })
+  }
+
   return NextResponse.json({
     approved: decision === 'approved',
     decision,
@@ -87,6 +91,7 @@ export async function POST(req: NextRequest) {
     riskScore: riskScore.score,
     riskRecommendation: riskScore.recommendation,
     injection: injCheck.flagged ? { detected: true, patterns: injCheck.patterns } : { detected: false },
+    approvalLink,
     latencyMs: Date.now() - start,
   })
 }

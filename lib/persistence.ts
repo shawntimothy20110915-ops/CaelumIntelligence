@@ -41,7 +41,11 @@ async function getPool() {
   const Pool = pg.default?.Pool ?? pg.Pool
   if (!Pool) return null
   const needsSsl = /sslmode=require/.test(url) || /neon\.tech|supabase\.co|vercel|render\.com|railway/.test(url)
-  pool = new Pool({ connectionString: url, ssl: needsSsl ? { rejectUnauthorized: false } : undefined, max: 2 }) as typeof pool
+  // Verify the server certificate by default. Managed Postgres (Neon/Supabase/…)
+  // present valid public CAs. Only disable for self-signed certs via explicit opt-in.
+  const insecure = process.env.DATABASE_SSL_INSECURE === 'true'
+  const ssl = needsSsl ? { rejectUnauthorized: !insecure } : undefined
+  pool = new Pool({ connectionString: url, ssl, max: 2 }) as typeof pool
   return pool
 }
 

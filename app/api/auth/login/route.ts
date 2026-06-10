@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server'
 import { getStore, findUserByEmail } from '@/lib/store'
 import { verifyPassword } from '@/lib/crypto'
 import { createSessionToken, sessionCookie } from '@/lib/session'
+import { rateLimit, clientIp } from '@/lib/ratelimit'
 
 export async function POST(req: Request) {
+  if (!rateLimit(`login:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many attempts. Try again shortly.' }, { status: 429 })
+  }
+
   let body: { email?: string; password?: string }
   try { body = await req.json() } catch { body = {} }
   const email = (body.email || '').trim().toLowerCase()
