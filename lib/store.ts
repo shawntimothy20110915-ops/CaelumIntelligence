@@ -460,12 +460,14 @@ export function buildLeaderboard(store: Store): LeaderboardEntry[] {
 }
 
 export function buildTrustGraph(store: Store) {
-  const nodes: TrustGraphNode[] = []
-  const edges: TrustGraphEdge[] = []
-  store.passports.forEach(p => nodes.push({ id: p.agentId, type: 'agent', label: p.label, trustScore: store.trustScores.get(p.agentId)?.score }))
-  store.orgs.forEach(o => nodes.push({ id: o.id, type: 'org', label: o.name }))
-  store.proofs.forEach(pr => edges.push({ source: pr.passportId, target: pr.grantedTo, weight: 1, type: 'delegated' }))
-  store.a2aPayments.forEach(pay => edges.push({ source: pay.fromPassport, target: pay.toPassport, weight: pay.amountUsd, type: 'paid' }))
+  const nodes: TrustGraphNode[] = [
+    ...Array.from(store.passports.values(), p => ({ id: p.agentId, type: 'agent' as const, label: p.label, trustScore: store.trustScores.get(p.agentId)?.score })),
+    ...Array.from(store.orgs.values(), o => ({ id: o.id, type: 'org' as const, label: o.name }))
+  ]
+  const edges: TrustGraphEdge[] = [
+    ...Array.from(store.proofs.values(), pr => ({ source: pr.passportId, target: pr.grantedTo, weight: 1, type: 'delegated' as const })),
+    ...Array.from(store.a2aPayments.values(), pay => ({ source: pay.fromPassport, target: pay.toPassport, weight: pay.amountUsd, type: 'paid' as const }))
+  ]
   store.trustGraph = { nodes, edges }
   return store.trustGraph
 }
