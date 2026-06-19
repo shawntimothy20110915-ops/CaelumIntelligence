@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const store = getStore()
   const { orgId, increment } = await req.json() as { orgId: string; increment: Partial<Pick<QuotaDashboard, 'evalUsed' | 'proofUsed' | 'apiCallsUsed'>> }
-  let quota = store.quotas.get(orgId)
+  const quota = store.quotas.get(orgId)
   if (!quota) return NextResponse.json({ error: 'quota not found' }, { status: 404 })
   if (increment.evalUsed) quota.evalUsed += increment.evalUsed
   if (increment.proofUsed) quota.proofUsed += increment.proofUsed
