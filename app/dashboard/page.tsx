@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
@@ -254,16 +254,16 @@ export default function Dashboard() {
     } catch { setAgentError('Network error') } finally { setAgentBuilding(false) }
   }
 
-  if (!session) return null
-
-  const activeCount = passports.filter(p => p.status === 'active').length
+  const activeCount = useMemo(() => passports.filter(p => p.status === 'active').length, [passports])
   const chainCount  = delegations.length
 
-  const filteredPassports = passports.filter(pp => {
+  const filteredPassports = useMemo(() => passports.filter(pp => {
     const matchSearch = !search || pp.agentName.toLowerCase().includes(search.toLowerCase()) || pp.id.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || pp.status === statusFilter
     return matchSearch && matchStatus
-  })
+  }), [passports, search, statusFilter])
+
+  if (!session) return null
 
   const headerMap: Record<NavKey, { title: string; sub: string }> = {
     dashboard:   { title: 'Overview',      sub: 'Your agent passports'                    },
@@ -693,6 +693,16 @@ function PassportSection({ passports, delegations, loading, showMintForm, mintNa
   onMint: () => void; onDelegate: (p: Passport) => void; onRevoke: (p: Passport) => void
   onInspect: (p: Passport) => void; standalone?: boolean
 }) {
+  const childCountMap = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const d of delegations) {
+      map.set(d.parentId, (map.get(d.parentId) || 0) + 1)
+    }
+    return map
+  }, [delegations])
+
+  const childIdSet = useMemo(() => new Set(delegations.map(d => d.childId)), [delegations])
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
@@ -756,8 +766,8 @@ function PassportSection({ passports, delegations, loading, showMintForm, mintNa
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
           <AnimatePresence>
             {passports.map((pp, i) => {
-              const isChild = delegations.some(d => d.childId === pp.id)
-              const childCount = delegations.filter(d => d.parentId === pp.id).length
+              const isChild = childIdSet.has(pp.id)
+              const childCount = childCountMap.get(pp.id) || 0
               const isRevoked = pp.status === 'revoked'
               return (
                 <motion.div key={pp.id} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }} transition={{ delay: i * 0.04 }}
@@ -982,10 +992,18 @@ function ActivityView({ entries, onClear }: { entries: ActivityEntry[]; onClear:
 function TrustChainView({ passports, delegations, onClearChain }: {
   passports: Passport[]; delegations: DelegationLink[]; onClearChain: (id: string) => void
 }) {
-  const findPassport = (id: string) => passports.find(p => p.id === id)
+  const findPassport = useCallback((id: string) => passports.find(p => p.id === id), [passports])
 
-  const roots = passports.filter(p => !delegations.some(d => d.childId === p.id))
-  const orphanLinks = delegations.filter(d => !passports.some(p => p.id === d.childId))
+  const roots = useMemo(() => passports.filter(p => !delegations.some(d => d.childId === p.id)), [passports, delegations])
+  const orphanLinks = useMemo(() => delegations.filter(d => !passports.some(p => p.id === d.childId)), [passports, delegations])
+  const childrenMap = useMemo(() => {
+    const map = new Map<string, DelegationLink[]>()
+    for (const d of delegations) {
+      if (!map.has(d.parentId)) map.set(d.parentId, [])
+      map.get(d.parentId)!.push(d)
+    }
+    return map
+  }, [delegations])
 
   if (delegations.length === 0) {
     return (
@@ -1002,7 +1020,7 @@ function TrustChainView({ passports, delegations, onClearChain }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       {roots.map(root => {
-        const children = delegations.filter(d => d.parentId === root.id)
+        const children = childrenMap.get(root.id) || []
         if (children.length === 0) return null
         return (
           <motion.div key={root.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
