@@ -12,7 +12,7 @@ export default function GraphPage() {
   const [edges, setEdges] = useState<Edge[]>([])
   const [selected, setSelected] = useState<Node | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const stateRef = useRef<{ nodes: Node[]; edges: Edge[]; frame: number }>({ nodes: [], edges: [], frame: 0 })
+  const stateRef = useRef<{ nodes: Node[]; edges: Edge[]; nodeMap: Map<string, Node>; frame: number }>({ nodes: [], edges: [], nodeMap: new Map(), frame: 0 })
 
   useEffect(() => {
     fetch('/api/trust-graph').then(r => r.json()).then(d => {
@@ -27,6 +27,7 @@ export default function GraphPage() {
       setEdges(d.graph?.edges ?? [])
       stateRef.current.nodes = seeded
       stateRef.current.edges = d.graph?.edges ?? []
+      stateRef.current.nodeMap = new Map(seeded.map((n: Node) => [n.id, n]))
     })
   }, [])
 
@@ -64,7 +65,8 @@ export default function GraphPage() {
           ns[j].vy = ((ns[j].vy ?? 0) + f * dy / Math.sqrt(d2))
         }
       }
-      const nodeMap = new Map(ns.map(n => [n.id, n]))
+      // ⚡ Bolt: Use cached O(1) map lookups instead of allocating a new O(N) Map every frame
+      const nodeMap = stateRef.current.nodeMap
       for (const e of es) {
         const s = nodeMap.get(e.source), t = nodeMap.get(e.target)
         if (!s || !t) continue
@@ -85,7 +87,8 @@ export default function GraphPage() {
       simulate()
       const ns = stateRef.current.nodes
       const es = stateRef.current.edges
-      const nodeMap = new Map(ns.map(n => [n.id, n]))
+      // ⚡ Bolt: Reuse the cached Map to prevent massive GC pauses in the animation loop
+      const nodeMap = stateRef.current.nodeMap
       ctx!.clearRect(0, 0, canvas!.width, canvas!.height)
       for (const e of es) {
         const s = nodeMap.get(e.source), t = nodeMap.get(e.target)
@@ -122,7 +125,7 @@ export default function GraphPage() {
     return () => { running = false; cancelAnimationFrame(stateRef.current.frame) }
   }, [nodes.length])
 
-  useEffect(() => { stateRef.current.nodes = nodes; stateRef.current.edges = edges }, [nodes, edges])
+  useEffect(() => { stateRef.current.nodes = nodes; stateRef.current.edges = edges; stateRef.current.nodeMap = new Map(nodes.map(n => [n.id, n])) }, [nodes, edges])
 
   function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect()
