@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
@@ -254,16 +254,16 @@ export default function Dashboard() {
     } catch { setAgentError('Network error') } finally { setAgentBuilding(false) }
   }
 
-  if (!session) return null
-
-  const activeCount = passports.filter(p => p.status === 'active').length
+  const activeCount = useMemo(() => passports.filter(p => p.status === 'active').length, [passports])
   const chainCount  = delegations.length
 
-  const filteredPassports = passports.filter(pp => {
+  const filteredPassports = useMemo(() => passports.filter(pp => {
     const matchSearch = !search || pp.agentName.toLowerCase().includes(search.toLowerCase()) || pp.id.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || pp.status === statusFilter
     return matchSearch && matchStatus
-  })
+  }), [passports, search, statusFilter])
+
+  if (!session) return null
 
   const headerMap: Record<NavKey, { title: string; sub: string }> = {
     dashboard:   { title: 'Overview',      sub: 'Your agent passports'                    },
@@ -984,8 +984,8 @@ function TrustChainView({ passports, delegations, onClearChain }: {
 }) {
   const findPassport = (id: string) => passports.find(p => p.id === id)
 
-  const roots = passports.filter(p => !delegations.some(d => d.childId === p.id))
-  const orphanLinks = delegations.filter(d => !passports.some(p => p.id === d.childId))
+  const roots = useMemo(() => passports.filter(p => !delegations.some(d => d.childId === p.id)), [passports, delegations])
+  const orphanLinks = useMemo(() => delegations.filter(d => !passports.some(p => p.id === d.childId)), [passports, delegations])
 
   if (delegations.length === 0) {
     return (

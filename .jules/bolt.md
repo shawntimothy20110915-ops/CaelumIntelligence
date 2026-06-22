@@ -1,0 +1,3 @@
+## $(date +%Y-%m-%d) - Memoization in Next.js Dashboard
+**Learning:** In Next.js client-side dashboards, using `Array.prototype.filter` or `.some` without memoization inside a component's render function can cause unnecessary recalculations on every re-render (e.g. state changes like typing in a search box). Since arrays like `passports` or `delegations` can grow large, this can be a performance bottleneck.
+**Action:** Always wrap derived filtered states like `filteredPassports`, `activeCount`, `roots`, or `orphanLinks` with `useMemo` from React, explicitly providing the dependencies in the dependency array (e.g., `[passports, search, statusFilter]`).
