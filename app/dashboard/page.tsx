@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
@@ -254,16 +254,21 @@ export default function Dashboard() {
     } catch { setAgentError('Network error') } finally { setAgentBuilding(false) }
   }
 
-  if (!session) return null
-
-  const activeCount = passports.filter(p => p.status === 'active').length
+  // ⚡ Bolt: memoize filtering to prevent recalculation on unrelated state changes
+  const activeCount = useMemo(() => passports.filter(p => p.status === 'active').length, [passports])
   const chainCount  = delegations.length
 
-  const filteredPassports = passports.filter(pp => {
-    const matchSearch = !search || pp.agentName.toLowerCase().includes(search.toLowerCase()) || pp.id.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === 'all' || pp.status === statusFilter
-    return matchSearch && matchStatus
-  })
+  const filteredPassports = useMemo(() => {
+    // ⚡ Bolt: lift string allocation out of the loop
+    const searchLower = (search || '').toLowerCase()
+    return passports.filter(pp => {
+      const matchSearch = !searchLower || pp.agentName.toLowerCase().includes(searchLower) || pp.id.toLowerCase().includes(searchLower)
+      const matchStatus = statusFilter === 'all' || pp.status === statusFilter
+      return matchSearch && matchStatus
+    })
+  }, [passports, search, statusFilter])
+
+  if (!session) return null
 
   const headerMap: Record<NavKey, { title: string; sub: string }> = {
     dashboard:   { title: 'Overview',      sub: 'Your agent passports'                    },

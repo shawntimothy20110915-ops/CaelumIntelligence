@@ -1,0 +1,3 @@
+## 2025-06-23 - Avoid repeated method calls in React array renders
+**Learning:** In Next.js/React applications with extensive dashboards containing client-side filtering arrays over large lists, calling methods like `.toLowerCase()` inside `.filter()` operations can lead to noticeable performance degredation because the operation happens per-item on every render.
+**Action:** Always extract static transformations (like converting a search query to lowercase) outside of the loop, and wrap the list computation in `useMemo` so it's not needlessly re-calculated when unrelated state variables change.
