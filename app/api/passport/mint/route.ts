@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     ...(session ? { ownerUserId: session.uid } : {}),
   }
   store.passports.set(id, passport)
+  store.agentToPassportId.set(agentId, id)
   store.apiKeys.set(apiKey, id)
 
   // Provision billing account

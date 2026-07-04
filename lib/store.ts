@@ -23,6 +23,7 @@ void HUMAN_REVIEW_MULTIPLIER // suppress lint
 
 interface Store {
   passports:      Map<string, AgentPassport>
+  agentToPassportId: Map<string, string>        // agentId → passportId
   apiKeys:        Map<string, string>           // apiKey → passportId
   proofs:         Map<string, DelegationProof>
   ledger:         LedgerEvent[]
@@ -236,6 +237,7 @@ function seedStore(store: Store) {
   ]
   for (const p of seedPassports) {
     store.passports.set(p.id, p)
+    store.agentToPassportId.set(p.agentId, p.id)
     store.apiKeys.set(p.apiKey, p.id)
   }
 
@@ -302,7 +304,7 @@ function seedStore(store: Store) {
 
 function initStore(): Store {
   const store: Store = {
-    passports: new Map(), apiKeys: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
+    passports: new Map(), agentToPassportId: new Map(), apiKeys: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
     approvalQueue: [], billing: new Map(), orgs: new Map(),
     promoCodes: new Map(), webhookEvents: [],
     seq: 0, startTime: Date.now(), baseEventCount: 847293, receiptCounter: 9115,
@@ -440,6 +442,19 @@ export function resolveApiKey(store: Store, apiKey: string): AgentPassport | nul
   return store.passports.get(passportId) ?? null
 }
 
+export function getPassportByAgentId(store: Store, agentId: string): AgentPassport | null {
+  // Rebuild index lazily if out of sync (e.g., after DB restore without the index)
+  if (store.agentToPassportId.size !== store.passports.size) {
+    store.agentToPassportId.clear()
+    for (const p of store.passports.values()) {
+      store.agentToPassportId.set(p.agentId, p.id)
+    }
+  }
+  const passportId = store.agentToPassportId.get(agentId)
+  if (!passportId) return null
+  return store.passports.get(passportId) ?? null
+}
+
 // ─── Wave-2 helpers ──────────────────────────────────────────────────────
 
 export function recordMeter(store: Store, orgId: string, passportId: string, metricType: MeterUsage['metricType'], count = 1) {
@@ -450,7 +465,7 @@ export function recordMeter(store: Store, orgId: string, passportId: string, met
 export function buildLeaderboard(store: Store): LeaderboardEntry[] {
   const entries: LeaderboardEntry[] = []
   store.trustScores.forEach((ts) => {
-    const p = [...store.passports.values()].find(p => p.agentId === ts.agentId)
+    const p = getPassportByAgentId(store, ts.agentId)
     entries.push({ rank: 0, agentId: ts.agentId, passportLabel: p?.label ?? ts.agentId, score: ts.score, approvals: ts.approvals, badges: ts.badges })
   })
   entries.sort((a, b) => b.score - a.score)

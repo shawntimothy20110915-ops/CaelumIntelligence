@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getStore } from '@/lib/store'
+import { getStore, getPassportByAgentId } from '@/lib/store'
 
 // Verified-by-AgentPass embed badge
 export async function GET(req: NextRequest) {
   const agentId = new URL(req.url).searchParams.get('agentId')
   if (!agentId) return new NextResponse('agentId required', { status: 400 })
   const store = getStore()
-  const passport = Array.from(store.passports.values()).find(p => p.agentId === agentId)
+  const passport = getPassportByAgentId(store, agentId)
   if (!passport) return new NextResponse('not found', { status: 404 })
   const ts = store.trustScores.get(agentId)
   const verified = passport.status === 'active'
