@@ -24,6 +24,7 @@ void HUMAN_REVIEW_MULTIPLIER // suppress lint
 interface Store {
   passports:      Map<string, AgentPassport>
   apiKeys:        Map<string, string>           // apiKey → passportId
+  agentToPassportId: Map<string, string>         // agentId → passportId
   proofs:         Map<string, DelegationProof>
   ledger:         LedgerEvent[]
   receipts:       Map<string, SignedReceipt>
@@ -237,6 +238,7 @@ function seedStore(store: Store) {
   for (const p of seedPassports) {
     store.passports.set(p.id, p)
     store.apiKeys.set(p.apiKey, p.id)
+    store.agentToPassportId.set(p.agentId, p.id)
   }
 
   store.billing.set('pass-7af2ab1c', { passportId: 'pass-7af2ab1c', plan: 'free',       credits: 50,  evalsUsed: 120,  proofCount: 1, spendUsd: 160.36,  budgetUsd: 500,  overageMode: 'hard', overageEvalsUsed: 0, overageCostUsd: 0, billingPeriodStart: now - 86400000 * 14, webhookUrl: null,                                    webhookAlertsSent: [], webhookEvalsCost: 0, orgId: null,       rateWindow: { count: 0, windowStart: now }, actionCosts: {} })
@@ -302,7 +304,7 @@ function seedStore(store: Store) {
 
 function initStore(): Store {
   const store: Store = {
-    passports: new Map(), apiKeys: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
+    passports: new Map(), apiKeys: new Map(), agentToPassportId: new Map(), proofs: new Map(), ledger: [], receipts: new Map(),
     approvalQueue: [], billing: new Map(), orgs: new Map(),
     promoCodes: new Map(), webhookEvents: [],
     seq: 0, startTime: Date.now(), baseEventCount: 847293, receiptCounter: 9115,
@@ -450,7 +452,7 @@ export function recordMeter(store: Store, orgId: string, passportId: string, met
 export function buildLeaderboard(store: Store): LeaderboardEntry[] {
   const entries: LeaderboardEntry[] = []
   store.trustScores.forEach((ts) => {
-    const p = [...store.passports.values()].find(p => p.agentId === ts.agentId)
+    const p = store.agentToPassportId.has(ts.agentId) ? store.passports.get(store.agentToPassportId.get(ts.agentId)!) : undefined
     entries.push({ rank: 0, agentId: ts.agentId, passportLabel: p?.label ?? ts.agentId, score: ts.score, approvals: ts.approvals, badges: ts.badges })
   })
   entries.sort((a, b) => b.score - a.score)

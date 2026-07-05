@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const store = getStore()
   const { actionId, agentId } = await req.json()
   if (!actionId || !agentId) return NextResponse.json({ error: 'actionId, agentId required' }, { status: 400 })
-  const passport = [...store.passports.values()].find(p => p.agentId === agentId)
+  const passport = store.agentToPassportId.has(agentId) ? store.passports.get(store.agentToPassportId.get(agentId)!) : undefined
   const hw = passport ? store.hardwareBindings.get(passport.id) : undefined
   if (!hw) return NextResponse.json({ error: 'no hardware binding for agent' }, { status: 422 })
   const signature = computeHmac(`action:${actionId}:agent:${agentId}`)

@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
   }
   store.passports.set(id, passport)
   store.apiKeys.set(apiKey, id)
+  store.agentToPassportId.set(agentId, id)
 
   // Provision billing account
   const billing = getBilling(store, id)

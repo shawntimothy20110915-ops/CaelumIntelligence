@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const agentId = url.searchParams.get('agentId')
   const store = getStore()
   if (agentId) {
-    const passport = Array.from(store.passports.values()).find(p => p.agentId === agentId)
+    const passport = store.agentToPassportId.has(agentId) ? store.passports.get(store.agentToPassportId.get(agentId)!) : undefined
     if (!passport) return NextResponse.json({ error: 'not found' }, { status: 404 })
     const score = getOrInitTrustScore(store, agentId, passport.id)
     return NextResponse.json({ score, passport: { id: passport.id, label: passport.label, agentId } })
