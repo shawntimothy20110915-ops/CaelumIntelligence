@@ -449,8 +449,13 @@ export function recordMeter(store: Store, orgId: string, passportId: string, met
 
 export function buildLeaderboard(store: Store): LeaderboardEntry[] {
   const entries: LeaderboardEntry[] = []
+
+  // ⚡ Bolt: Pre-compute agentId to passport lookup to avoid O(N*M) Map spreading inside loop
+  const passportByAgentId = new Map<string, AgentPassport>()
+  store.passports.forEach(p => passportByAgentId.set(p.agentId, p))
+
   store.trustScores.forEach((ts) => {
-    const p = [...store.passports.values()].find(p => p.agentId === ts.agentId)
+    const p = passportByAgentId.get(ts.agentId)
     entries.push({ rank: 0, agentId: ts.agentId, passportLabel: p?.label ?? ts.agentId, score: ts.score, approvals: ts.approvals, badges: ts.badges })
   })
   entries.sort((a, b) => b.score - a.score)
